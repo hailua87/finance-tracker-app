@@ -9,7 +9,7 @@ st.set_page_config(page_title="Nhà quê tập chi tiêu", layout="wide")
 st.title("🌾 Nhà quê tập chi tiêu")
 
 # Phân chia 3 tab chính
-tab_cashflow, tab_invest, tab_savings = st.tabs(["💰 Dòng tiền", "📈 Đầu tư", "🏦 Tiết kiệm"])
+tab_cashflow, tab_invest, tab_savings = st.tabs(["💰 Dòng tiền", "📈 Đầu tư", "🏦 Tiết kiệm (Funding)"])
 
 # --- TAB 1: DÒNG TIỀN ---
 with tab_cashflow:
@@ -51,35 +51,67 @@ with tab_invest:
     })
     st.dataframe(df_invest, use_container_width=True, hide_index=True)
 
-# --- TAB 3: TIẾT KIỆM ---
+# --- TAB 3: TIẾT KIỆM (FUNDING) ---
 with tab_savings:
-    st.header("Phân bổ Quỹ Tích Lũy")
+    st.header("Danh mục Sổ Tiết Kiệm (Funding)")
     
-    # 1. Tieu Boi Funding
-    st.subheader("👧 Tieu Boi Funding")
-    st.write("**Quỹ giáo dục & Phát triển cho bé**")
-    st.caption("Hiện tại: 45,000,000 VND / Mục tiêu: 200,000,000 VND (22.5%)")
-    st.progress(0.225)
-    st.divider() # Đường gạch ngang phân cách
+    # Tạo mockup data chứa toàn bộ sổ tiết kiệm của gia đình
+    # Dữ liệu này sau này sẽ được kéo từ Database/Google Sheets
+    df_savings = pd.DataFrame({
+        "Chủ quỹ": ["Tieu Boi Funding", "Daddy Funding", "Mama Funding", "Tieu Boi Funding", "Mama Funding"],
+        "Ngày gửi": [date(2026, 1, 15), date(2026, 3, 10), date(2026, 5, 20), date(2026, 7, 10), date(2026, 6, 5)],
+        "Kỳ hạn": ["6 Tháng", "12 Tháng", "3 Tháng", "12 Tháng", "6 Tháng"],
+        "Lãi suất (%)": [5.0, 5.5, 4.0, 5.2, 4.8],
+        "Tiền gốc (VND)": [50000000, 100000000, 150000000, 30000000, 80000000]
+    })
     
-    # 2. Daddy Funding
-    st.subheader("👨 Daddy Funding")
-    st.write("**Quỹ đầu tư & Tiêu dùng của Chồng**")
-    st.caption("Hiện tại: 30,000,000 VND / Mục tiêu: 100,000,000 VND (30.0%)")
-    st.progress(0.30)
-    st.divider()
+    # Danh sách các quỹ để render UI
+    funds_info = [
+        ("👧 Tieu Boi Funding", "Tieu Boi Funding"),
+        ("👨 Daddy Funding", "Daddy Funding"),
+        ("👩 Mama Funding", "Mama Funding")
+    ]
     
-    # 3. Mama Funding
-    st.subheader("👩 Mama Funding")
-    st.write("**Quỹ tích lũy & Mua sắm của Vợ**")
-    st.caption("Hiện tại: 75,000,000 VND / Mục tiêu: 150,000,000 VND (50.0%)")
-    st.progress(0.50)
-    st.divider()
-    
-    # Nút chuyển tiền nhanh vào quỹ (UI Mockup)
-    with st.expander("➕ Nạp tiền vào quỹ"):
-        with st.form("fund_add_form"):
-            fund_sel = st.selectbox("Chọn quỹ", ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"])
-            fund_add_amt = st.number_input("Số tiền nạp (VND)", min_value=0, step=500000)
-            if st.form_submit_button("Xác nhận"):
-                st.success(f"Đã cập nhật {fund_add_amt:,.0f} VND vào {fund_sel}")
+    # Render từng quỹ
+    for icon_title, fund_name in funds_info:
+        st.subheader(icon_title)
+        
+        # Lọc dữ liệu theo từng quỹ
+        fund_data = df_savings[df_savings["Chủ quỹ"] == fund_name].copy()
+        
+        # Tính tổng tiền gốc đang gửi của quỹ đó
+        total_goc = fund_data["Tiền gốc (VND)"].sum()
+        st.markdown(f"**Tổng vốn đang gửi:** <span style='color:#2e7d32; font-size:18px'>{total_goc:,.0f} VND</span>", unsafe_allow_html=True)
+        
+        # Định dạng lại bảng để hiển thị đẹp hơn
+        if not fund_data.empty:
+            display_df = fund_data[['Ngày gửi', 'Kỳ hạn', 'Lãi suất (%)', 'Tiền gốc (VND)']]
+            st.dataframe(
+                display_df.style.format({
+                    "Lãi suất (%)": "{:.1f}", 
+                    "Tiền gốc (VND)": "{:,.0f}"
+                }),
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.caption("Chưa có khoản gửi nào.")
+            
+        st.divider() # Đường kẻ ngang phân cách
+
+    # Form thêm sổ tiết kiệm mới
+    with st.expander("➕ Thêm khoản gửi tiết kiệm mới"):
+        with st.form("new_deposit_form"):
+            new_fund = st.selectbox("Chọn Quỹ", ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"])
+            new_amount = st.number_input("Số tiền (VND)", min_value=0, step=1000000)
+            
+            col_d1, col_d2, col_d3 = st.columns(3)
+            with col_d1:
+                new_date = st.date_input("Ngày gửi")
+            with col_d2:
+                new_term = st.selectbox("Kỳ hạn", ["1 Tháng", "3 Tháng", "6 Tháng", "12 Tháng"])
+            with col_d3:
+                new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, format="%.1f")
+                
+            if st.form_submit_button("Lưu Khoản Gửi"):
+                st.success(f"Đã lưu khoản gửi {new_amount:,.0f} VND vào {new_fund}!")
