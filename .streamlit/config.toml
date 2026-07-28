@@ -1,9 +1,8 @@
 [theme]
 primaryColor = "#10b981"
-backgroundColor = "#0f172a"
-secondaryBackgroundColor = "#1e293b"
-textColor = "#f8fafc"
-font = "sans serif"
-
+backgroundColor = "#0a0f18" # Đổi sang đen tuyền (True Slate)
+secondaryBackgroundColor = "#111827"
+textColor = "#e2e8f0"
+# Xoá dòng font = "sans serif" đi
 [server]
 headless = true
