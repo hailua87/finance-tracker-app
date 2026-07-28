@@ -20,7 +20,7 @@ with tab_cashflow:
             account = st.selectbox("Tài khoản", ["TK TCB Vợ", "TK TCB Chồng", "Tiền mặt"])
             amount = st.number_input("Số tiền (VND)", min_value=0, step=50000)
         with col2:
-            category = st.selectbox("Phân loại", ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Khác"])
+            category = st.selectbox("Phân loại", ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"])
             note = st.text_input("Ghi chú")
         
         submitted = st.form_submit_button("Lưu Giao dịch")
@@ -29,7 +29,6 @@ with tab_cashflow:
 
 # --- TAB 2: ĐẦU TƯ (Chia làm Cổ phiếu & Chứng chỉ quỹ) ---
 with tab_invest:
-    # Tạo 2 tab con bên trong tab Đầu tư
     subtab_stock, subtab_ccq = st.tabs(["📈 Cổ phiếu (Stocks)", "📊 Chứng chỉ quỹ (Mutual Funds)"])
     
     # -- Tab con 1: CỔ PHIẾU --
@@ -40,20 +39,22 @@ with tab_invest:
             with col1:
                 ticker = st.selectbox("Mã cổ phiếu", ["VIB", "VCI", "MBB", "SSI", "TPB"])
                 action = st.radio("Lệnh", ["Mua", "Bán"], horizontal=True)
+                # THÊM LOGIC PHÂN BỔ QUỸ CHO CỔ PHIẾU
+                fund_owner_stock = st.selectbox("Thuộc quỹ", ["Daddy Funding", "Mama Funding", "Tieu Boi Funding"])
             with col2:
                 volume = st.number_input("Khối lượng (CP)", min_value=100, step=100)
                 price = st.number_input("Giá khớp (VND)", min_value=0)
                 
             if st.form_submit_button("Lưu Giao dịch"):
-                st.success(f"Đã {action} {volume} cổ phiếu {ticker} với giá {price:,.0f} VND!")
+                st.success(f"Đã {action} {volume} CP {ticker} ({fund_owner_stock}) với giá {price:,.0f} VND!")
 
         st.markdown("**Trạng thái Danh mục Cổ phiếu**")
         df_stock = pd.DataFrame({
+            "Thuộc quỹ": ["Daddy Funding", "Daddy Funding", "Tieu Boi Funding"],
             "Mã CP": ["SSI", "VIB", "MBB"],
             "Khối lượng": [1000, 2500, 1500],
             "Giá vốn trung bình": [32500, 20100, 22000]
         })
-        # Giả lập giá hiện tại để tính Lãi/Lỗ
         df_stock["Giá hiện tại"] = [34000, 19500, 23100]
         df_stock["Tổng vốn (VND)"] = df_stock["Khối lượng"] * df_stock["Giá vốn trung bình"]
         df_stock["Lãi/Lỗ (%)"] = ((df_stock["Giá hiện tại"] - df_stock["Giá vốn trung bình"]) / df_stock["Giá vốn trung bình"]) * 100
@@ -79,22 +80,27 @@ with tab_invest:
                     "VESAF (VinaCapital)", 
                     "TCBF (Techcom Capital - Trái phiếu)",
                     "TCEF (Techcom Capital - Cổ phiếu)",
-                    "SSI-SCA (SSIAM)"
+                    "SSI-SCA (SSIAM)",
+                    "VCBF-BCF (Vietcombank - Cổ phiếu)",
+                    "VCBF-FIF (Vietcombank - Trái phiếu)"
                 ])
                 action_ccq = st.radio("Lệnh quỹ", ["Mua (SIP)", "Bán"], horizontal=True)
+                # THÊM LOGIC PHÂN BỔ QUỸ CHO CCQ
+                fund_owner_ccq = st.selectbox("Thuộc quỹ", ["Tieu Boi Funding", "Mama Funding", "Daddy Funding"])
             with col2:
                 volume_ccq = st.number_input("Số lượng CCQ", min_value=0.0, step=10.0, format="%.2f")
                 nav_price = st.number_input("Giá NAV/CCQ (VND)", min_value=0)
                 
             if st.form_submit_button("Lưu Giao dịch Quỹ"):
-                st.success(f"Đã {action_ccq} {volume_ccq} CCQ {fund_ticker.split(' ')[0]} với giá NAV {nav_price:,.0f} VND!")
+                st.success(f"Đã {action_ccq} {volume_ccq} CCQ {fund_ticker.split(' ')[0]} ({fund_owner_ccq}) với giá NAV {nav_price:,.0f} VND!")
                 
         st.markdown("**Danh mục Chứng chỉ quỹ tích lũy**")
         df_ccq = pd.DataFrame({
-            "Quỹ Đầu Tư": ["DCDS", "TCBF", "VESAF"],
-            "Loại quỹ": ["Cổ phiếu", "Trái phiếu", "Cổ phiếu"],
-            "Số lượng CCQ": [1250.5, 3400.0, 850.2],
-            "Giá vốn (NAV)": [65000, 15200, 21000]
+            "Thuộc quỹ": ["Tieu Boi Funding", "Mama Funding", "Tieu Boi Funding", "Daddy Funding"],
+            "Quỹ Đầu Tư": ["DCDS", "TCBF", "VCBF-BCF", "VESAF"],
+            "Loại quỹ": ["Cổ phiếu", "Trái phiếu", "Cổ phiếu", "Cổ phiếu"],
+            "Số lượng CCQ": [1250.5, 3400.0, 500.0, 850.2],
+            "Giá vốn (NAV)": [65000, 15200, 25500, 21000]
         })
         df_ccq["Tổng giá trị (VND)"] = df_ccq["Số lượng CCQ"] * df_ccq["Giá vốn (NAV)"]
         
@@ -111,7 +117,6 @@ with tab_invest:
 with tab_savings:
     st.header("Danh mục Sổ Tiết Kiệm (Funding)")
     
-    # Đã bổ sung cột "Ngân hàng" vào dữ liệu
     df_savings = pd.DataFrame({
         "Chủ quỹ": ["Tieu Boi Funding", "Daddy Funding", "Mama Funding", "Tieu Boi Funding", "Mama Funding"],
         "Ngân hàng": ["Techcombank (TCB)", "Techcombank (TCB)", "Vietcombank (VCB)", "MBBank", "Techcombank (TCB)"],
@@ -135,7 +140,6 @@ with tab_savings:
         st.markdown(f"**Tổng vốn đang gửi:** <span style='color:#2e7d32; font-size:18px'>{total_goc:,.0f} VND</span>", unsafe_allow_html=True)
         
         if not fund_data.empty:
-            # Render thêm cột Ngân hàng ra bảng hiển thị
             display_df = fund_data[['Ngân hàng', 'Ngày gửi', 'Kỳ hạn', 'Lãi suất (%)', 'Tiền gốc (VND)']]
             st.dataframe(
                 display_df.style.format({
@@ -154,7 +158,6 @@ with tab_savings:
             new_fund = st.selectbox("Chọn Quỹ", ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"])
             new_amount = st.number_input("Số tiền (VND)", min_value=0, step=1000000)
             
-            # Tổ chức lại layout 2 cột x 2 dòng để hiển thị tốt trên màn hình dọc của điện thoại
             col_d1, col_d2 = st.columns(2)
             with col_d1:
                 new_date = st.date_input("Ngày gửi")
