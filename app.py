@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-# Thiết lập cấu hình trang với tên mới
+# Thiết lập cấu hình trang
 st.set_page_config(page_title="Nhà quê tập chi tiêu", layout="wide")
 
 # Tiêu đề chính của ứng dụng
@@ -53,34 +53,33 @@ with tab_invest:
 
 # --- TAB 3: TIẾT KIỆM ---
 with tab_savings:
-    st.header("Sổ Tiết Kiệm & Quỹ Mục Tiêu")
+    st.header("Phân bổ Quỹ Tích Lũy")
     
-    # Sổ tiết kiệm có kỳ hạn
-    st.subheader("Sổ Tiết Kiệm (Term Deposits)")
-    df_savings = pd.DataFrame({
-        "Nguồn tiền": ["TK TCB Vợ", "TK TCB Chồng"],
-        "Kỳ hạn": ["6 Tháng", "12 Tháng"],
-        "Tiền gốc (VND)": [100000000, 150000000],
-        "Lãi suất (%)": [4.5, 5.2],
-        "Ngày đáo hạn": [date(2026, 9, 15), date(2027, 2, 20)]
-    })
-    
-    # Tính lãi dự kiến
-    df_savings['Lãi dự kiến'] = df_savings['Tiền gốc (VND)'] * (df_savings['Lãi suất (%)'] / 100)
-    
-    # Hiển thị bảng data format đẹp
-    st.dataframe(
-        df_savings.style.format({
-            "Tiền gốc (VND)": "{:,.0f}", 
-            "Lãi suất (%)": "{:.1f}", 
-            "Lãi dự kiến": "{:,.0f}"
-        }),
-        use_container_width=True,
-        hide_index=True
-    )
-    
-    # Quỹ mục tiêu (Ví dụ: Quỹ giáo dục)
-    st.subheader("Quỹ Tích Lũy")
-    st.write("**Quỹ giáo dục cho bé**")
-    st.caption("45,000,000 / 200,000,000 VND (22.5%)")
+    # 1. Tieu Boi Funding
+    st.subheader("👧 Tieu Boi Funding")
+    st.write("**Quỹ giáo dục & Phát triển cho bé**")
+    st.caption("Hiện tại: 45,000,000 VND / Mục tiêu: 200,000,000 VND (22.5%)")
     st.progress(0.225)
+    st.divider() # Đường gạch ngang phân cách
+    
+    # 2. Daddy Funding
+    st.subheader("👨 Daddy Funding")
+    st.write("**Quỹ đầu tư & Tiêu dùng của Chồng**")
+    st.caption("Hiện tại: 30,000,000 VND / Mục tiêu: 100,000,000 VND (30.0%)")
+    st.progress(0.30)
+    st.divider()
+    
+    # 3. Mama Funding
+    st.subheader("👩 Mama Funding")
+    st.write("**Quỹ tích lũy & Mua sắm của Vợ**")
+    st.caption("Hiện tại: 75,000,000 VND / Mục tiêu: 150,000,000 VND (50.0%)")
+    st.progress(0.50)
+    st.divider()
+    
+    # Nút chuyển tiền nhanh vào quỹ (UI Mockup)
+    with st.expander("➕ Nạp tiền vào quỹ"):
+        with st.form("fund_add_form"):
+            fund_sel = st.selectbox("Chọn quỹ", ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"])
+            fund_add_amt = st.number_input("Số tiền nạp (VND)", min_value=0, step=500000)
+            if st.form_submit_button("Xác nhận"):
+                st.success(f"Đã cập nhật {fund_add_amt:,.0f} VND vào {fund_sel}")
