@@ -5,22 +5,20 @@ from datetime import date
 # 1. THIẾT LẬP CẤU HÌNH CƠ BẢN
 st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", layout="wide")
 
-# 2. HALLMARK CUSTOM CSS INJECTION (Anti-AI-Slop Design)
+# 2. HALLMARK CUSTOM CSS INJECTION (Nâng cấp giao diện trực quan & chuyên sâu)
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
     
     html, body, [class*="st-"] {
         font-family: 'Inter', sans-serif;
     }
     
-    /* Ép font Space Grotesk cá tính cho tiêu đề và các chỉ số tài chính */
     h1, h2, h3, .stMetricValue {
         font-family: 'Space Grotesk', sans-serif !important;
         letter-spacing: -0.03em;
     }
     
-    /* Header tùy biến ấn tượng */
     .hallmark-header {
         font-family: 'Space Grotesk', sans-serif;
         font-size: 2.2rem;
@@ -32,19 +30,34 @@ st.markdown("""
         margin-top: -10px;
     }
     
+    /* Thẻ Dashboard Tùy biến Cao cấp (Card container) */
+    .dashboard-card {
+        background-color: #111827;
+        border: 1px solid #1f2937;
+        padding: 20px;
+        border-radius: 12px;
+        margin-bottom: 15px;
+    }
+    
+    .metric-title {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #94a3b8;
+        font-weight: 600;
+    }
+
     #stHeader { display: none; }
 </style>
 """, unsafe_allow_html=True)
 
-# Render Header chính
-st.markdown('<div class="hallmark-header">NHÀ QUÊ TẬP CHI TIÊU.</div>', unsafe_allow_html=True)
+st.markdown('<div class="hallmark-header">NHÀ QUÊ TẬP CHI TIẾU.</div>', unsafe_allow_html=True)
 
-# Hàm hỗ trợ tô màu Lãi/Lỗ
 def color_profit_loss(val):
     color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#94a3b8'
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
-# 3. KHO MODAL (@st.dialog) - HIỂN THỊ DẠNG POPUP TRÀN VIỀN
+# 3. KHO MODAL (@st.dialog)
 @st.dialog("GHI NHẬN DÒNG TIỀN")
 def modal_cashflow():
     with st.form("cashflow_form", clear_on_submit=True):
@@ -91,28 +104,76 @@ def modal_savings():
         if st.form_submit_button("LƯU KHOẢN GỬI", use_container_width=True):
             st.success("Đã ghi nhận sổ tiết kiệm mới!")
 
-# 4. THANH ĐIỀU HƯỚNG BẢNG
+# 4. TAB ĐIỀU HƯỚNG
 tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
     "TỔNG QUAN", "DÒNG TIỀN", "ĐẦU TƯ", "TIẾT KIỆM", "BĐS & TÍN DỤNG"
 ])
 
-# --- TAB 0: TỔNG QUAN ---
+# --- TAB 0: TỔNG QUAN (ĐÃ REDESIGN CỰC KỲ TRỰC QUAN) ---
 with tab_home:
-    # Rule Hallmark: Layout bất đối xứng [1.5, 1, 1]
-    col_nw, col_asset, col_liab = st.columns([1.5, 1, 1])
-    tong_tiet_kiem, tong_dau_tu, bds_da_dong = 410000000, 135000000, 800000000    
+    # Khai báo dữ liệu tài chính
+    tong_tiet_kiem, tong_ccq, tong_cp, bds_da_dong = 410000000, 75000000, 60000000, 800000000    
     no_bds_con_lai, no_khoan_vay = 1700000000, 500000000   
-    tong_tai_san = tong_tiet_kiem + tong_dau_tu + bds_da_dong
+    
+    tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tong_no = no_bds_con_lai + no_khoan_vay
     tai_san_rong = tong_tai_san - tong_no
+
+    # 1. Khối Banner Tổng Quan (Asymmetrical Layout - Tiêu điểm Tài sản Ròng)
+    c_left, c_right = st.columns([1.6, 1])
     
-    with col_nw:
-        st.metric("TÀI SẢN RÒNG (NET WORTH)", f"{tai_san_rong:,.0f} ₫")
-    with col_asset:
-        st.metric("TỔNG TÀI SẢN", f"{tong_tai_san:,.0f} ₫")
-    with col_liab:
-        st.metric("TỔNG DƯ NỢ", f"{tong_no:,.0f} ₫", delta_color="inverse")
+    with c_left:
+        st.markdown(f"""
+        <div class="dashboard-card" style="border-left: 5px solid #10b981; background: linear-gradient(135deg, #111827 0%, #0f172a 100%);">
+            <div class="metric-title">💰 TÀI SẢN RÒNG HIỆN TẠI (NET WORTH)</div>
+            <div style="font-family: 'Space Grotesk'; font-size: 2.8rem; font-weight: 700; color: #10b981; margin: 5px 0;">
+                {tai_san_rong:,.0f} ₫
+            </div>
+            <div style="color: #94a3b8; font-size: 0.9rem;">
+                Tổng tài sản: <b style="color: #f8fafc;">{tong_tai_san:,.0f} ₫</b> &nbsp;|&nbsp; Tổng dư nợ: <b style="color: #ef4444;">{tong_no:,.0f} ₫</b>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    with c_right:
+        st.markdown(f"""
+        <div class="dashboard-card">
+            <div class="metric-title">📊 TỶ LỆ ĐÒN BẨY TÀI CHÍNH</div>
+            <div style="font-family: 'Space Grotesk'; font-size: 1.8rem; font-weight: 700; color: #f8fafc; margin: 10px 0;">
+                {(tong_no / tong_tai_san)*100:.1f}% <span style="font-size: 1rem; color: #94a3b8; font-weight: 400;">vốn vay</span>
+            </div>
+            <div style="color: #38bdf8; font-size: 0.85rem;">
+                💡 An toàn ngưỡng: Dưới 50% là lý tưởng cho gia đình.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    st.markdown("<br/>", unsafe_allow_html=True)
+
+    # 2. Cấu trúc Phân bổ Tài sản Trực quan (Asset Allocation Breakdown)
+    st.subheader("CƠ CẤU PHÂN BỔ TÀI SẢN")
     
+    col_bar1, col_bar2, col_bar3, col_bar4 = st.columns(4)
+    with col_bar1:
+        st.metric("Tiết kiệm ngân hàng", f"{tong_tiet_kiem:,.0f} ₫", f"{(tong_tiet_kiem/tong_tai_san)*100:.1f}% TS")
+    with col_bar2:
+        st.metric("BĐS theo tiến độ", f"{bds_da_dong:,.0f} ₫", f"{(bds_da_dong/tong_tai_san)*100:.1f}% TS")
+    with col_bar3:
+        st.metric("Chứng chỉ quỹ (CCQ)", f"{tong_ccq:,.0f} ₫", f"{(tong_ccq/tong_tai_san)*100:.1f}% TS")
+    with col_bar4:
+        st.metric("Cổ phiếu đầu tư", f"{tong_cp:,.0f} ₫", f"{(tong_cp/tong_tai_san)*100:.1f}% TS")
+
+    # Hiển thị Progress Bar trực quan mức độ đóng góp tài sản
+    st.markdown("<br/>", unsafe_allow_html=True)
+    ratio_tiet_kiem = tong_tiet_kiem / tong_tai_san
+    ratio_bds = bds_da_dong / tong_tai_san
+    ratio_dau_tu = (tong_ccq + tong_cp) / tong_tai_san
+    
+    st.caption("Biểu đồ tỷ trọng thanh khoản tài sản:")
+    st.progress(ratio_tiet_kiem, text=f"Thanh khoản cao (Tiết kiệm): {ratio_tiet_kiem*100:.1f}%")
+    st.progress(ratio_bds, text=f"Tài sản lớn (BĐS): {ratio_bds*100:.1f}%")
+    st.progress(ratio_dau_tu, text=f"Tăng trưởng (Cổ phiếu + CCQ): {ratio_dau_tu*100:.1f}%")
+
     st.divider()
 
 # --- TAB 1: DÒNG TIỀN ---
@@ -123,13 +184,12 @@ with tab_cashflow:
             modal_cashflow()
             
     st.markdown("**LỊCH SỬ GIAO DỊCH**")
-    st.caption("Dữ liệu đang chờ kết nối từ Supabase...")
+    st.caption("Dữ liệu đang đồng bộ...")
 
 # --- TAB 2: ĐẦU TƯ ---
 with tab_invest:
     subtab_stock, subtab_ccq = st.tabs(["CỔ PHIẾU", "CHỨNG CHỈ QUỸ"])
     
-    # 2.1 CỔ PHIẾU
     with subtab_stock:
         col_btn2, _ = st.columns([1, 3])
         with col_btn2:
@@ -152,7 +212,6 @@ with tab_invest:
         }).map(color_profit_loss, subset=['Lãi/Lỗ (%)'])
         st.dataframe(styled_stock, use_container_width=True, hide_index=True)
 
-    # 2.2 CHỨNG CHỈ QUỸ
     with subtab_ccq:
         col_btn_ccq, _ = st.columns([1, 3])
         with col_btn_ccq:
@@ -173,7 +232,7 @@ with tab_invest:
             use_container_width=True, hide_index=True
         )
 
-# --- TAB 3: TIẾT KIỆM (FUNDING PORTFOLIOS) ---
+# --- TAB 3: TIẾT KIỆM ---
 with tab_savings:
     col_btn3, _ = st.columns([1, 3])
     with col_btn3:
