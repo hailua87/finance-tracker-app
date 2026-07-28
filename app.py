@@ -5,7 +5,7 @@ from datetime import date
 # 1. THIẾT LẬP CẤU HÌNH CƠ BẢN
 st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", layout="wide")
 
-# 2. HALLMARK CUSTOM CSS INJECTION (Nâng cấp giao diện trực quan & chuyên sâu)
+# 2. HALLMARK CUSTOM CSS INJECTION
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
@@ -30,7 +30,6 @@ st.markdown("""
         margin-top: -10px;
     }
     
-    /* Thẻ Dashboard Tùy biến Cao cấp (Card container) */
     .dashboard-card {
         background-color: #111827;
         border: 1px solid #1f2937;
@@ -51,13 +50,13 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="hallmark-header">NHÀ QUÊ TẬP CHI TIẾU.</div>', unsafe_allow_html=True)
+st.markdown('<div class="hallmark-header">NHÀ QUÊ TẬP CHI TIÊU.</div>', unsafe_allow_html=True)
 
 def color_profit_loss(val):
     color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#94a3b8'
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
-# 3. KHO MODAL (@st.dialog)
+# 3. KHO MODAL (@st.dialog) CHO PHÉP NHẬP LIỆU ĐỘNG
 @st.dialog("GHI NHẬN DÒNG TIỀN")
 def modal_cashflow():
     with st.form("cashflow_form", clear_on_submit=True):
@@ -67,6 +66,28 @@ def modal_cashflow():
         note = st.text_input("Ghi chú")
         if st.form_submit_button("LƯU GIAO DỊCH", use_container_width=True):
             st.success(f"Đã lưu {amount:,.0f} VND!")
+
+@st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
+def modal_realestate():
+    with st.form("realestate_form", clear_on_submit=True):
+        bds_name = st.text_input("Tên dự án / Căn hộ", value="Căn hộ Vinhomes Grand Park")
+        dot_tt = st.text_input("Tên đợt (Ví dụ: Đợt 4, Đợt cất nóc)")
+        so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0, step=10000000)
+        ngay_tt = st.date_input("Hạn thanh toán")
+        trang_thai = st.selectbox("Trạng thái", ["Đã thanh toán", "Chưa thanh toán"])
+        if st.form_submit_button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
+            st.success(f"Đã cập nhật tiến độ cho {bds_name}!")
+
+@st.dialog("THÊM KHOẢN VAY / TÍN DỤNG")
+def modal_debt():
+    with st.form("debt_form", clear_on_submit=True):
+        muc_dich = st.text_input("Mục đích vay (Ví dụ: Vay mua nhà, Vay tiêu dùng)")
+        ngan_hang = st.selectbox("Ngân hàng cho vay", ["Techcombank (TCB)", "Vietcombank (VCB)", "VPBank", "TPBank", "Khác"])
+        du_no = st.number_input("Dư nợ gốc ban đầu/hiện tại (VND)", min_value=0, step=10000000)
+        lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, format="%.1f", value=8.5)
+        goc_lai_thang = st.number_input("Tiền gốc & lãi phải trả hàng tháng (VND)", min_value=0, step=500000)
+        if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
+            st.success("Đã ghi nhận khoản vay mới!")
 
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
@@ -104,14 +125,13 @@ def modal_savings():
         if st.form_submit_button("LƯU KHOẢN GỬI", use_container_width=True):
             st.success("Đã ghi nhận sổ tiết kiệm mới!")
 
-# 4. TAB ĐIỀU HƯỚNG
+# 4. TAB ĐIỀU HƯỚNG CHÍNH
 tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
     "TỔNG QUAN", "DÒNG TIỀN", "ĐẦU TƯ", "TIẾT KIỆM", "BĐS & TÍN DỤNG"
 ])
 
-# --- TAB 0: TỔNG QUAN (ĐÃ REDESIGN CỰC KỲ TRỰC QUAN) ---
+# --- TAB 0: TỔNG QUAN ---
 with tab_home:
-    # Khai báo dữ liệu tài chính
     tong_tiet_kiem, tong_ccq, tong_cp, bds_da_dong = 410000000, 75000000, 60000000, 800000000    
     no_bds_con_lai, no_khoan_vay = 1700000000, 500000000   
     
@@ -119,9 +139,7 @@ with tab_home:
     tong_no = no_bds_con_lai + no_khoan_vay
     tai_san_rong = tong_tai_san - tong_no
 
-    # 1. Khối Banner Tổng Quan (Asymmetrical Layout - Tiêu điểm Tài sản Ròng)
     c_left, c_right = st.columns([1.6, 1])
-    
     with c_left:
         st.markdown(f"""
         <div class="dashboard-card" style="border-left: 5px solid #10b981; background: linear-gradient(135deg, #111827 0%, #0f172a 100%);">
@@ -149,8 +167,6 @@ with tab_home:
         """, unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
-
-    # 2. Cấu trúc Phân bổ Tài sản Trực quan (Asset Allocation Breakdown)
     st.subheader("CƠ CẤU PHÂN BỔ TÀI SẢN")
     
     col_bar1, col_bar2, col_bar3, col_bar4 = st.columns(4)
@@ -163,7 +179,6 @@ with tab_home:
     with col_bar4:
         st.metric("Cổ phiếu đầu tư", f"{tong_cp:,.0f} ₫", f"{(tong_cp/tong_tai_san)*100:.1f}% TS")
 
-    # Hiển thị Progress Bar trực quan mức độ đóng góp tài sản
     st.markdown("<br/>", unsafe_allow_html=True)
     ratio_tiet_kiem = tong_tiet_kiem / tong_tai_san
     ratio_bds = bds_da_dong / tong_tai_san
@@ -173,7 +188,6 @@ with tab_home:
     st.progress(ratio_tiet_kiem, text=f"Thanh khoản cao (Tiết kiệm): {ratio_tiet_kiem*100:.1f}%")
     st.progress(ratio_bds, text=f"Tài sản lớn (BĐS): {ratio_bds*100:.1f}%")
     st.progress(ratio_dau_tu, text=f"Tăng trưởng (Cổ phiếu + CCQ): {ratio_dau_tu*100:.1f}%")
-
     st.divider()
 
 # --- TAB 1: DÒNG TIỀN ---
@@ -182,30 +196,24 @@ with tab_cashflow:
     with col_btn:
         if st.button("+ THÊM GIAO DỊCH MỚI", use_container_width=True):
             modal_cashflow()
-            
     st.markdown("**LỊCH SỬ GIAO DỊCH**")
     st.caption("Dữ liệu đang đồng bộ...")
 
 # --- TAB 2: ĐẦU TƯ ---
 with tab_invest:
     subtab_stock, subtab_ccq = st.tabs(["CỔ PHIẾU", "CHỨNG CHỈ QUỸ"])
-    
     with subtab_stock:
         col_btn2, _ = st.columns([1, 3])
         with col_btn2:
             if st.button("+ LỆNH CỔ PHIẾU MỚI", use_container_width=True):
                 modal_stock()
-                
         df_stock = pd.DataFrame({
-            "Mã CP": ["SSI", "VIB", "MBB"],
-            "CTCK": ["SSI", "TCBS", "TCBS"],
-            "Khối lượng": [1000, 2500, 1500],
-            "Giá vốn": [32500, 20100, 22000]
+            "Mã CP": ["SSI", "VIB", "MBB"], "CTCK": ["SSI", "TCBS", "TCBS"],
+            "Khối lượng": [1000, 2500, 1500], "Giá vốn": [32500, 20100, 22000]
         })
         df_stock["Giá hiện tại"] = [34000, 19500, 23100]
         df_stock["Tổng vốn (VND)"] = df_stock["Khối lượng"] * df_stock["Giá vốn"]
         df_stock["Lãi/Lỗ (%)"] = ((df_stock["Giá hiện tại"] - df_stock["Giá vốn"]) / df_stock["Giá vốn"]) * 100
-        
         styled_stock = df_stock.style.format({
             "Giá vốn": "{:,.0f}", "Giá hiện tại": "{:,.0f}", 
             "Tổng vốn (VND)": "{:,.0f}", "Lãi/Lỗ (%)": "{:.2f}%"
@@ -217,14 +225,12 @@ with tab_invest:
         with col_btn_ccq:
             if st.button("+ GIAO DỊCH CCQ MỚI", use_container_width=True):
                 modal_ccq()
-                
         st.markdown("**DANH MỤC CHỨNG CHỈ QUỸ TÍCH LŨY**")
         df_ccq = pd.DataFrame({
             "Portfolio": ["Tieu Boi Funding", "Mama Funding", "Tieu Boi Funding", "Daddy Funding"],
             "Quỹ": ["DCDS", "TCBF", "VCBF-BCF", "VESAF"],
             "Nền tảng": ["DragonX", "TCBS", "VCB Digibank", "Fmarket"],
-            "Số lượng": [1250.5, 3400.0, 500.0, 850.2],
-            "Giá vốn NAV": [65000, 15200, 25500, 21000]
+            "Số lượng": [1250.5, 3400.0, 500.0, 850.2], "Giá vốn NAV": [65000, 15200, 25500, 21000]
         })
         df_ccq["Tổng giá trị (VND)"] = df_ccq["Số lượng"] * df_ccq["Giá vốn NAV"]
         st.dataframe(
@@ -238,7 +244,6 @@ with tab_savings:
     with col_btn3:
         if st.button("+ TẠO SỔ TIẾT KIỆM MỚI", use_container_width=True):
             modal_savings()
-            
     df_savings = pd.DataFrame({
         "Portfolio": ["Tieu Boi Funding", "Daddy Funding", "Mama Funding", "Tieu Boi Funding", "Mama Funding"],
         "Ngân hàng": ["TCB", "TCB", "VCB", "MBBank", "TCB"],
@@ -247,14 +252,12 @@ with tab_savings:
         "Lãi suất (%)": [5.0, 5.5, 4.0, 5.2, 4.8],
         "Tiền gốc (VND)": [50000000, 100000000, 150000000, 30000000, 80000000]
     })
-    
     funds_info = [("Tieu Boi Funding", "Tieu Boi Funding"), ("Daddy Funding", "Daddy Funding"), ("Mama Funding", "Mama Funding")]
     for display_title, fund_name in funds_info:
         st.subheader(display_title)
         fund_data = df_savings[df_savings["Portfolio"] == fund_name].copy()
         total_goc = fund_data["Tiền gốc (VND)"].sum()
         st.markdown(f"**Tổng vốn:** <span style='color:#10b981; font-size:18px'>{total_goc:,.0f} VND</span>", unsafe_allow_html=True)
-        
         if not fund_data.empty:
             st.dataframe(
                 fund_data[['Ngân hàng', 'Ngày gửi', 'Kỳ hạn', 'Lãi suất (%)', 'Tiền gốc (VND)']].style.format({"Lãi suất (%)": "{:.1f}", "Tiền gốc (VND)": "{:,.0f}"}),
@@ -262,16 +265,24 @@ with tab_savings:
             )
         st.divider()
 
-# --- TAB 4: BĐS & TÍN DỤNG ---
+# --- TAB 4: BĐS & TÍN DỤNG (ĐÃ THÊM CÁC NÚT THAO TÁC ĐỘNG) ---
 with tab_realestate:
-    st.header("BẤT ĐỘNG SẢN & KHOẢN VAY")
+    col_re_btn, col_debt_btn, _ = st.columns([1.2, 1.2, 2])
+    with col_re_btn:
+        if st.button("+ THÊM TIẾN ĐỘ BĐS", use_container_width=True):
+            modal_realestate()
+    with col_debt_btn:
+        if st.button("+ THÊM KHOẢN VAY MỚI", use_container_width=True):
+            modal_debt()
+            
+    st.markdown("<br/>", unsafe_allow_html=True)
+    st.subheader("Bất động sản mua theo tiến độ")
     
-    st.subheader("Căn hộ mua theo tiến độ")
     tong_gia_tri_bds = 2500000000
     da_thanh_toan = 800000000
     tien_do_phan_tram = da_thanh_toan / tong_gia_tri_bds
     
-    st.caption(f"Đã thanh toán: {da_thanh_toan:,.0f} / {tong_gia_tri_bds:,.0f} VND ({tien_do_phan_tram*100:.1f}%)")
+    st.caption(f"Tiến độ giải ngân thực tế: {da_thanh_toan:,.0f} / {tong_gia_tri_bds:,.0f} VND ({tien_do_phan_tram*100:.1f}%)")
     st.progress(tien_do_phan_tram)
     
     df_tiendo = pd.DataFrame({
@@ -280,11 +291,12 @@ with tab_realestate:
         "Trạng thái": ["Đã thanh toán", "Đã thanh toán", "Chưa thanh toán"]
     })
     st.dataframe(df_tiendo.style.format({"Số tiền (VND)": "{:,.0f}"}), use_container_width=True, hide_index=True)
+    
     st.divider()
     
-    st.subheader("Khoản vay tín dụng")
+    st.subheader("Khoản vay tín dụng & Dư nợ")
     df_vay = pd.DataFrame({
-        "Mục đích vay": ["Vay tiêu dùng"],
+        "Mục đích vay": ["Vay mua nhà / Tiêu dùng"],
         "Ngân hàng": ["Techcombank"],
         "Lãi suất": ["8.5%"],
         "Dư nợ gốc (VND)": [500000000],
