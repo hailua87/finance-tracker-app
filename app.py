@@ -64,6 +64,7 @@ def color_profit_loss(val):
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
 BANK_ACCOUNTS = ["VCB chồng", "TCB chồng", "HSBC chồng", "UOB chồng", "UOB vợ", "TCB vợ"]
+FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
 CATS = ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"]
 
@@ -105,29 +106,52 @@ def modal_edit_cashflow(row_data):
             except Exception as e:
                 st.error(f"Lỗi: {e}")
 
-@st.dialog("THÊM TIẾN ĐỘ BĐS")
+@st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
 def modal_realestate():
     with st.form("realestate_form", clear_on_submit=True):
-        bds_name = st.text_input("Tên dự án / Căn hộ")
-        dot_tt = st.text_input("Tên đợt (Ví dụ: Đợt 4, Đợt cất nóc)")
-        so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0, step=10000000)
+        bds_name = st.text_input("Tên dự án / Căn hộ (VD: Chung cư Q7 Riverside)")
+        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0, step=100000000)
+        
+        st.markdown("---")
+        dot_tt = st.text_input("Tên đợt (VD: Đợt 4 - Cất nóc)")
+        so_tien_tt = st.number_input("Số tiền thanh toán đợt này (VND)", min_value=0, step=10000000)
+        nguon_tien = st.selectbox("Nguồn tiền thanh toán", FUNDING_SOURCES)
+        
         ngay_tt = st.date_input("Hạn thanh toán")
         trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
+        
         if st.form_submit_button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
             try:
-                data = {"project_name": bds_name, "installment_name": dot_tt, "amount": so_tien_tt, "due_date": str(ngay_tt), "status": trang_thai}
+                data = {
+                    "project_name": bds_name,
+                    "contract_value": gia_tri_hd,
+                    "installment_name": dot_tt,
+                    "amount": so_tien_tt,
+                    "funding_source": nguon_tien,
+                    "due_date": str(ngay_tt),
+                    "status": trang_thai
+                }
                 supabase.table("realestate").insert(data).execute()
                 st.success("Đã ghi nhận tiến độ BĐS mới!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Lỗi: {e}. Vui lòng tạo bảng 'realestate' trên Supabase.")
+                st.error(f"Lỗi: {e}. Vui lòng tạo cột 'contract_value' và 'funding_source' trên Supabase.")
 
 @st.dialog("SỬA TIẾN ĐỘ BĐS")
 def modal_edit_realestate(row_data):
     with st.form("edit_realestate_form", clear_on_submit=True):
         bds_name = st.text_input("Tên dự án / Căn hộ", value=row_data['project_name'])
+        
+        cv_val = int(row_data['contract_value']) if 'contract_value' in row_data and not pd.isna(row_data['contract_value']) else 0
+        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0, step=100000000, value=cv_val)
+        
+        st.markdown("---")
         dot_tt = st.text_input("Tên đợt", value=row_data['installment_name'])
-        so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0, step=10000000, value=int(row_data['amount']))
+        so_tien_tt = st.number_input("Số tiền thanh toán đợt này (VND)", min_value=0, step=10000000, value=int(row_data['amount']))
+        
+        fs_val = row_data['funding_source'] if 'funding_source' in row_data else "Tiền mặt"
+        idx_fs = FUNDING_SOURCES.index(fs_val) if fs_val in FUNDING_SOURCES else 0
+        nguon_tien = st.selectbox("Nguồn tiền thanh toán", FUNDING_SOURCES, index=idx_fs)
         
         try:
             due_dt = pd.to_datetime(row_data['due_date']).date()
@@ -142,7 +166,15 @@ def modal_edit_realestate(row_data):
         
         if st.form_submit_button("CẬP NHẬT BĐS", use_container_width=True):
             try:
-                data = {"project_name": bds_name, "installment_name": dot_tt, "amount": so_tien_tt, "due_date": str(ngay_tt), "status": trang_thai}
+                data = {
+                    "project_name": bds_name,
+                    "contract_value": gia_tri_hd,
+                    "installment_name": dot_tt,
+                    "amount": so_tien_tt,
+                    "funding_source": nguon_tien,
+                    "due_date": str(ngay_tt),
+                    "status": trang_thai
+                }
                 supabase.table("realestate").update(data).eq("id", row_data['id']).execute()
                 st.success("Đã cập nhật BĐS!")
                 st.rerun()
@@ -280,21 +312,18 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 
 # --- TAB 0: TỔNG QUAN ---
 with tab_home:
-    # 1. Fetch Tiết kiệm
     try:
         res_savings = supabase.table("savings").select("amount").execute()
         tong_tiet_kiem = sum([row["amount"] for row in res_savings.data]) if res_savings.data else 0
     except:
         tong_tiet_kiem = 0
         
-    # 2. Fetch Bất động sản (Chỉ tính các đợt 'Đã thanh toán')
     try:
         res_re_total = supabase.table("realestate").select("amount").eq("status", "Đã thanh toán").execute()
         bds_da_dong = sum([row["amount"] for row in res_re_total.data]) if res_re_total.data else 0
     except:
         bds_da_dong = 0
         
-    # 3. Fetch Nợ Khoản Vay & Tính Dư nợ
     try:
         res_debts = supabase.table("debts").select("*").execute()
         no_khoan_vay = 0
@@ -305,7 +334,6 @@ with tab_home:
                 start_dt = pd.to_datetime(row['start_date'])
                 months_passed = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
                 months_passed = max(0, min(months_passed, row['total_months']))
-                
                 goc_co_dinh = row['original_principal'] / row['total_months']
                 du_no_thuc_te = row['original_principal'] - (goc_co_dinh * months_passed)
                 no_khoan_vay += du_no_thuc_te
@@ -399,7 +427,6 @@ with tab_cashflow:
                     supabase.table("cashflow").delete().eq("id", action_id).execute()
                     st.success("Đã xóa giao dịch!")
                     st.rerun()
-
         else:
             st.info("Chưa có giao dịch nào được ghi nhận.")
     except Exception as e:
@@ -481,12 +508,30 @@ with tab_realestate:
         df_re = pd.DataFrame()
 
     if not df_re.empty and "project_name" in df_re.columns:
-        df_re_display = df_re[['id', 'project_name', 'installment_name', 'amount', 'due_date', 'status']].rename(
-            columns={'project_name': 'Dự án', 'installment_name': 'Đợt', 'amount': 'Số tiền (VND)', 'due_date': 'Hạn thanh toán', 'status': 'Trạng thái'}
+        # Fallback an toàn nếu chưa tạo 2 cột mới trên Database
+        if "contract_value" not in df_re.columns:
+            df_re["contract_value"] = 0
+        if "funding_source" not in df_re.columns:
+            df_re["funding_source"] = "N/A"
+            
+        df_re_display = df_re[['id', 'project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status']].rename(
+            columns={
+                'project_name': 'Dự án', 
+                'contract_value': 'Giá trị HĐ (VND)',
+                'installment_name': 'Tên Đợt', 
+                'amount': 'Thanh toán (VND)', 
+                'funding_source': 'Nguồn tiền',
+                'due_date': 'Hạn thanh toán', 
+                'status': 'Trạng thái'
+            }
         )
         st.dataframe(
             df_re_display,
-            column_config={"id": None, "Số tiền (VND)": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
+            column_config={
+                "id": None, 
+                "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"),
+                "Thanh toán (VND)": st.column_config.NumberColumn("Thanh toán (VND)", format="%,.0f ₫")
+            },
             use_container_width=True, hide_index=True
         )
         
@@ -528,7 +573,6 @@ with tab_realestate:
         today = pd.to_datetime(date.today())
         df_vay['start_date'] = pd.to_datetime(df_vay['start_date'])
         
-        # LOGIC TÀI CHÍNH TỰ ĐỘNG
         df_vay['Tháng đã trả'] = (today.year - df_vay['start_date'].dt.year) * 12 + (today.month - df_vay['start_date'].dt.month)
         df_vay['Tháng đã trả'] = df_vay.apply(lambda x: max(0, min(x['Tháng đã trả'], x['total_months'])), axis=1)
         
@@ -553,7 +597,6 @@ with tab_realestate:
             use_container_width=True, hide_index=True
         )
         
-        # Action Nợ
         st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU KHOẢN VAY")
         action_id_debt = st.selectbox(
             "Chọn khoản vay để cập nhật:", 
@@ -573,6 +616,5 @@ with tab_realestate:
                 supabase.table("debts").delete().eq("id", action_id_debt).execute()
                 st.success("Đã xóa khoản vay!")
                 st.rerun()
-
     else:
         st.info("Dữ liệu dư nợ hiện đang trống. Vui lòng thêm khoản vay mới.")
