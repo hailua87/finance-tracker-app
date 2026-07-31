@@ -197,7 +197,7 @@ def modal_stock():
         
         c3, c4 = st.columns(2)
         with c3:
-            volume = st.number_input("Khối lượng (CP)", min_value=1.0, step=None, value=100.0)
+            volume = st.number_input("Khối lượng (CP)", min_value=1.0, step=None)
         with c4:
             price = st.number_input("Giá khớp / Giá vốn TB (VND)", min_value=0.0, step=None)
             
@@ -242,7 +242,7 @@ def modal_ccq():
         
         c3, c4 = st.columns(2)
         with c3:
-            volume_ccq = st.number_input("Số lượng CCQ", min_value=0.01, step=None, format="%.2f", value=10.0)
+            volume_ccq = st.number_input("Số lượng CCQ", min_value=0.01, step=None, format="%.2f")
         with c4:
             nav_price = st.number_input("Giá NAV / Giá vốn TB (VND)", min_value=0.0, step=None)
             
@@ -1051,10 +1051,161 @@ with tab_savings:
                 },
                 use_container_width=True, hide_index=True
             )
+            
+            st.markdown(f"**⚙️ TÙY CHỈNH DỮ LIỆU SỔ TIẾT KIỆM ({fund_name.upper()})**")
+            action_id_sav = st.selectbox(
+                "Chọn sổ tiết kiệm để cập nhật:", 
+                fund_data['id'].tolist(), 
+                format_func=lambda x: f"{fund_data[fund_data['id'] == x]['bank'].values[0]} | Gốc: {fund_data[fund_data['id'] == x]['amount'].values[0]:,.0f} ₫",
+                key=f"select_sav_{fund_name}"
+            )
+            
+            selected_sav_row = fund_data[fund_data['id'] == action_id_sav].iloc[0]
+            
+            col_s1, col_s2, _ = st.columns([1.5, 1.5, 3])
+            with col_s1:
+                if st.button("✏️ SỬA SỔ NÀY", use_container_width=True, key=f"edit_sav_{fund_name}"):
+                    modal_edit_savings(selected_sav_row)
+            with col_s2:
+                if st.button("❌ TẤT TOÁN / XÓA SỔ NÀY", use_container_width=True, key=f"del_sav_{fund_name}"):
+                    supabase.table("savings").delete().eq("id", action_id_sav).execute()
+                    st.success("Đã xóa sổ tiết kiệm!")
+                    st.rerun()
         else:
             st.caption("Chưa có sổ tiết kiệm nào trong quỹ này.")
         st.divider()
 
 # --- TAB 4: BĐS & TÍN DỤNG ---
 with tab_realestate:
-    st.info("Dữ liệu BĐS & Tín dụng hiển thị theo hệ thống.")
+    col_re_btn, col_debt_btn, _ = st.columns([1.2, 1.2, 2])
+    with col_re_btn:
+        if st.button("+ THÊM TIẾN ĐỘ BĐS", use_container_width=True):
+            modal_realestate()
+    with col_debt_btn:
+        if st.button("+ THÊM KHOẢN VAY", use_container_width=True):
+            modal_debt()
+            
+    st.markdown("<br/>", unsafe_allow_html=True)
+    
+    # ------------------ PHẦN BẤT ĐỘNG SẢN ------------------
+    st.subheader("Bất động sản mua theo tiến độ")
+    
+    try:
+        res_re = supabase.table("realestate").select("*").execute()
+        df_re = pd.DataFrame(res_re.data) if res_re.data else pd.DataFrame()
+    except:
+        df_re = pd.DataFrame()
+
+    if not df_re.empty and "project_name" in df_re.columns:
+        if "contract_value" not in df_re.columns:
+            df_re["contract_value"] = 0
+        if "funding_source" not in df_re.columns:
+            df_re["funding_source"] = "N/A"
+        if "note" not in df_re.columns:
+            df_re["note"] = ""
+            
+        df_re_display = df_re[['id', 'project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note']].rename(
+            columns={
+                'project_name': 'Dự án', 
+                'contract_value': 'Giá trị HĐ (VND)',
+                'installment_name': 'Tên Đợt', 
+                'amount': 'Thanh toán (VND)', 
+                'funding_source': 'Nguồn tiền',
+                'due_date': 'Hạn thanh toán', 
+                'status': 'Trạng thái',
+                'note': 'Ghi chú'
+            }
+        )
+        st.dataframe(
+            df_re_display,
+            column_config={
+                "id": None, 
+                "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"),
+                "Thanh toán (VND)": st.column_config.NumberColumn("Thanh toán (VND)", format="%,.0f ₫")
+            },
+            use_container_width=True, hide_index=True
+        )
+        
+        st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BĐS")
+        action_id_re = st.selectbox(
+            "Chọn tiến độ BĐS để cập nhật:", 
+            df_re['id'].tolist(), 
+            format_func=lambda x: f"{df_re[df_re['id'] == x]['project_name'].values[0]} | {df_re[df_re['id'] == x]['installment_name'].values[0]} | {df_re[df_re['id'] == x]['amount'].values[0]:,.0f} ₫",
+            key="select_re"
+        )
+        
+        selected_re_row = df_re[df_re['id'] == action_id_re].iloc[0]
+        
+        col_re1, col_re2, _ = st.columns([1.5, 1.5, 3])
+        with col_re1:
+            if st.button("✏️ SỬA TIẾN ĐỘ NÀY", use_container_width=True, key="edit_re"):
+                modal_edit_realestate(selected_re_row)
+        with col_re2:
+            if st.button("❌ XÓA TIẾN ĐỘ NÀY", use_container_width=True, key="del_re"):
+                supabase.table("realestate").delete().eq("id", action_id_re).execute()
+                st.success("Đã xóa BĐS!")
+                st.rerun()
+    else:
+        st.info("Dữ liệu tiến độ BĐS hiện đang trống. Vui lòng thêm đợt thanh toán mới.")
+    
+    st.divider()
+    
+    # ------------------ PHẦN KHOẢN VAY TÍN DỤNG ------------------
+    st.subheader("Khoản vay tín dụng & Dư nợ")
+    
+    try:
+        res_debt = supabase.table("debts").select("*").execute()
+        df_vay = pd.DataFrame(res_debt.data) if res_debt.data else pd.DataFrame()
+    except:
+        df_vay = pd.DataFrame()
+
+    if not df_vay.empty and "original_principal" in df_vay.columns:
+        today = pd.to_datetime(date.today())
+        df_vay['start_date'] = pd.to_datetime(df_vay['start_date'])
+        
+        df_vay['Tháng đã trả'] = (today.year - df_vay['start_date'].dt.year) * 12 + (today.month - df_vay['start_date'].dt.month)
+        df_vay['Tháng đã trả'] = df_vay.apply(lambda x: max(0, min(x['Tháng đã trả'], x['total_months'])), axis=1)
+        
+        df_vay["Gốc cố định/Tháng"] = df_vay["original_principal"] / df_vay["total_months"]
+        df_vay["Dư nợ HIỆN TẠI"] = df_vay["original_principal"] - (df_vay["Gốc cố định/Tháng"] * df_vay["Tháng đã trả"])
+        df_vay["Lãi tháng này"] = df_vay["Dư nợ HIỆN TẠI"] * (df_vay["interest_rate"] / 100 / 12)
+        df_vay["Tổng phải trả (Tháng này)"] = df_vay["Gốc cố định/Tháng"] + df_vay["Lãi tháng này"]
+        
+        df_display_vay = df_vay.rename(columns={"purpose": "Mục đích", "bank": "Ngân hàng", "interest_rate": "Lãi suất (%/năm)", "total_months": "Tổng kỳ hạn"})
+        cols_to_show = ['id', 'Mục đích', 'Ngân hàng', 'Dư nợ HIỆN TẠI', 'Tháng đã trả', 'Tổng kỳ hạn', 'Lãi suất (%/năm)', 'Gốc cố định/Tháng', 'Lãi tháng này', 'Tổng phải trả (Tháng này)']
+        
+        st.dataframe(
+            df_display_vay[cols_to_show],
+            column_config={
+                "id": None,
+                "Dư nợ HIỆN TẠI": st.column_config.NumberColumn("Dư nợ HIỆN TẠI", format="%,.0f ₫"),
+                "Gốc cố định/Tháng": st.column_config.NumberColumn("Gốc cố định/Tháng", format="%,.0f ₫"),
+                "Lãi tháng này": st.column_config.NumberColumn("Lãi tháng này", format="%,.0f ₫"),
+                "Tổng phải trả (Tháng này)": st.column_config.NumberColumn("Tổng phải trả (Tháng)", format="%,.0f ₫"),
+                "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất (%/năm)", format="%.2f%%")
+            },
+            use_container_width=True, hide_index=True
+        )
+        
+        st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU KHOẢN VAY")
+        action_id_debt = st.selectbox(
+            "Chọn khoản vay để cập nhật:", 
+            df_vay['id'].tolist(), 
+            format_func=lambda x: f"{df_vay[df_vay['id'] == x]['purpose'].values[0]} | {df_vay[df_vay['id'] == x]['bank'].values[0]} | Dư nợ: {df_vay[df_vay['id'] == x]['Dư nợ HIỆN TẠI'].values[0]:,.0f} ₫",
+            key="select_debt"
+        )
+        
+        selected_debt_row = df_vay[df_vay['id'] == action_id_debt].iloc[0]
+        
+        col_d1, col_d2, _ = st.columns([1.5, 1.5, 3])
+        with col_d1:
+            if st.button("✏️ SỬA KHOẢN VAY NÀY", use_container_width=True, key="edit_debt"):
+                modal_edit_debt(selected_debt_row)
+        with col_d2:
+            if st.button("❌ XÓA KHOẢN VAY NÀY", use_container_width=True, key="del_debt"):
+                supabase.table("debts").delete().eq("id", action_id_debt).execute()
+                st.success("Đã xóa khoản vay!")
+                st.rerun()
+
+    else:
+        st.info("Dữ liệu dư nợ hiện đang trống. Vui lòng thêm khoản vay mới.")
