@@ -653,7 +653,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN ---
+# --- TAB 1: DÒNG TIỀN (BỘ LỌC ĐA CHIỀU - DRILL-DOWN FILTER) ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -674,30 +674,41 @@ with tab_cashflow:
     default_start = date(2026, 8, 1)
     default_end = date.today()
     
-    st.markdown("#### 🔍 Bộ lọc & Tùy chọn hiển thị")
-    fc1, fc2, fc3 = st.columns([2, 2, 2])
+    # THIẾT KẾ GRID 3 CỘT CHO BỘ LỌC ĐA CHIỀU (DRILL-DOWN)
+    st.markdown("#### 🔍 Bộ lọc đa chiều (Drill-down Filter)")
+    fc1, fc2, fc3 = st.columns([1, 1.5, 1.5])
+    
     with fc1:
-        sub_c1, sub_c2 = st.columns(2)
-        with sub_c1:
-            start_date = st.date_input("Từ ngày", value=default_start)
-        with sub_c2:
-            end_date = st.date_input("Đến ngày", value=default_end)
+        start_date = st.date_input("Từ ngày", value=default_start)
+        end_date = st.date_input("Đến ngày", value=default_end)
+        
     with fc2:
-        selected_accounts = st.multiselect("Tài khoản nguồn", BANK_ACCOUNTS, default=BANK_ACCOUNTS)
+        acc_groups = st.multiselect("1. Nhóm tài khoản", ["TK Thanh toán", "Thẻ tín dụng", "Tài khoản CK"], default=["TK Thanh toán", "Thẻ tín dụng", "Tài khoản CK"])
+        available_accs = []
+        if "TK Thanh toán" in acc_groups: available_accs.extend(DEBIT_ACCOUNTS)
+        if "Thẻ tín dụng" in acc_groups: available_accs.extend(CREDIT_CARDS)
+        if "Tài khoản CK" in acc_groups: available_accs.extend(BROKER_ACCOUNTS)
+        selected_accounts = st.multiselect("↳ Tài khoản chi tiết", available_accs, default=available_accs)
+        
     with fc3:
-        available_cats = df_all['category'].unique().tolist() if not df_all.empty else CATS
-        selected_cats = st.multiselect("Phân loại danh mục", available_cats, default=available_cats)
+        cat_groups = st.multiselect("2. Nhóm dòng tiền", ["Thu nhập", "Chi tiêu"], default=["Thu nhập", "Chi tiêu"])
+        available_cats_list = []
+        if "Thu nhập" in cat_groups: available_cats_list.append("Lương/Thu nhập")
+        if "Chi tiêu" in cat_groups: available_cats_list.extend([c for c in CATS if c != "Lương/Thu nhập"])
+        selected_cats = st.multiselect("↳ Danh mục chi tiết", available_cats_list, default=available_cats_list)
 
+    # Lọc dữ liệu dựa trên drill-down
     if not df_all.empty:
         df_filtered = df_all.copy()
         df_filtered['created_at_dt'] = pd.to_datetime(df_filtered['created_at'])
         df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
+        
+        # Lọc thời gian
         df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
-            
-        if selected_accounts:
-            df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
-        if selected_cats:
-            df_filtered = df_filtered[df_filtered['category'].isin(selected_cats)]
+        
+        # Lọc tài khoản và danh mục khắt khe (Nếu list rỗng thì trả về Dataframe rỗng)
+        df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
+        df_filtered = df_filtered[df_filtered['category'].isin(selected_cats)]
     else:
         df_filtered = pd.DataFrame()
 
