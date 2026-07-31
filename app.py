@@ -108,20 +108,45 @@ def modal_edit_cashflow(row_data):
 
 @st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
 def modal_realestate():
-    with st.form("realestate_form", clear_on_submit=True):
-        bds_name = st.text_input("Tên dự án / Căn hộ (VD: Chung cư Q7 Riverside)")
+    # TRUY XUẤT DỮ LIỆU CŨ ĐỂ GỢI Ý
+    try:
+        res = supabase.table("realestate").select("project_name, contract_value").execute()
+        existing_projects = {}
+        if res.data:
+            for row in res.data:
+                existing_projects[row['project_name']] = row.get('contract_value', 0)
+    except:
+        existing_projects = {}
+        
+    project_opts = list(existing_projects.keys()) + ["➕ Thêm dự án mới..."]
+    
+    # Giao diện Động (Không dùng st.form)
+    choice = st.selectbox("Chọn Dự án / Căn hộ", project_opts)
+    
+    if choice == "➕ Thêm dự án mới...":
+        bds_name = st.text_input("Nhập tên dự án mới (VD: TT Avio B.30.05)")
         gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0, step=100000000)
+    else:
+        bds_name = choice
+        gia_tri_hd = existing_projects[choice]
+        st.info(f"💡 Giá trị hợp đồng của dự án này: **{gia_tri_hd:,.0f} ₫**")
         
-        st.markdown("---")
-        dot_tt = st.text_input("Tên đợt (VD: Đợt 4 - Cất nóc)")
-        so_tien_tt = st.number_input("Số tiền thanh toán đợt này (VND)", min_value=0, step=10000000)
-        nguon_tien = st.selectbox("Nguồn tiền thanh toán", FUNDING_SOURCES)
-        
-        ngay_tt = st.date_input("Hạn thanh toán")
-        trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
-        ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
-        
-        if st.form_submit_button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
+    st.markdown("---")
+    dot_tt = st.text_input("Tên đợt thanh toán (VD: Đợt 4 - Cất nóc)")
+    so_tien_tt = st.number_input("Số tiền thanh toán đợt này (VND)", min_value=0, step=10000000)
+    nguon_tien = st.selectbox("Nguồn tiền thanh toán", FUNDING_SOURCES)
+    
+    ngay_tt = st.date_input("Hạn thanh toán")
+    trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
+    ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
+    
+    # Nút bấm LƯU (Chạy độc lập không qua form)
+    if st.button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
+        if not bds_name.strip():
+            st.error("Vui lòng nhập tên dự án!")
+        elif not dot_tt.strip():
+            st.error("Vui lòng nhập tên đợt thanh toán!")
+        else:
             try:
                 data = {
                     "project_name": bds_name,
@@ -137,14 +162,14 @@ def modal_realestate():
                 st.success("Đã ghi nhận tiến độ BĐS mới!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Lỗi: {e}. Vui lòng tạo cột 'contract_value', 'funding_source', 'note' trên Supabase.")
+                st.error(f"Lỗi: {e}")
 
 @st.dialog("SỬA TIẾN ĐỘ BĐS")
 def modal_edit_realestate(row_data):
     with st.form("edit_realestate_form", clear_on_submit=True):
         bds_name = st.text_input("Tên dự án / Căn hộ", value=row_data['project_name'])
         
-        cv_val = int(row_data['contract_value']) if 'contract_value' in row_data and not pd.isna(row_data['contract_value']) else 0
+        cv_val = int(row_data['contract_value']) if 'contract_value' in row_data and pd.notna(row_data['contract_value']) else 0
         gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0, step=100000000, value=cv_val)
         
         st.markdown("---")
