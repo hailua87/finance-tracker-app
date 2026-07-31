@@ -56,15 +56,16 @@ def color_profit_loss(val):
     color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#94a3b8'
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
-# Phân tách chuẩn xác: Tài khoản thanh toán vs Thẻ tín dụng (UOB vợ đã chuyển sang Thẻ tín dụng)
 DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "TCB vợ"]
 CREDIT_CARDS = ["UOB vợ", "UOB chồng", "HSBC chồng"]
-BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS
+BROKER_ACCOUNTS = ["TCBS", "SSI", "VPS", "VNDirect", "HSC"]
+
+# Tổng hợp tất cả nguồn tài khoản dòng tiền
+BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS + BROKER_ACCOUNTS
 
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
 
-# BỘ DANH MỤC CHUẨN CHO GIA ĐÌNH TRẺ CÓ CON ĐI HỌC
 CATS = [
     "Lương/Thu nhập", 
     "Ăn uống & Sinh hoạt", 
@@ -93,7 +94,7 @@ def modal_cashflow():
         
         if st.form_submit_button("LƯU GIAO DỊCH", use_container_width=True):
             try:
-                data = {"account": account, "amount": amount, "category": category, "note": note}
+                data = {"account": account, "amount": int(amount), "category": category, "note": note}
                 supabase.table("cashflow").insert(data).execute()
                 st.success(f"Đã lưu thành công {amount:,.0f} VND!")
                 st.rerun()
@@ -117,7 +118,7 @@ def modal_edit_cashflow(row_data):
         
         if st.form_submit_button("CẬP NHẬT", use_container_width=True):
             try:
-                data = {"account": account, "amount": amount, "category": category, "note": note}
+                data = {"account": account, "amount": int(amount), "category": category, "note": note}
                 supabase.table("cashflow").update(data).eq("id", row_data['id']).execute()
                 st.success("Đã cập nhật thành công!")
                 st.rerun()
@@ -141,6 +142,11 @@ def modal_opening_balance():
             val = float(old_data.get(acc, 0.0))
             balances[acc] = st.number_input(f"{acc} (VND)", min_value=0.0, step=None, value=val)
             
+        st.markdown("##### 📈 Tài khoản Chứng khoán (Tiền mặt / Margin)")
+        for acc in BROKER_ACCOUNTS:
+            val = float(old_data.get(acc, 0.0))
+            balances[acc] = st.number_input(f"Tiền mặt {acc} (VND) [Nếu Margin âm, nhập số âm]", step=None, value=val)
+            
         st.markdown("##### 💳 Thẻ tín dụng (UOB, HSBC) (Dư nợ gốc)")
         for acc in CREDIT_CARDS:
             val = float(old_data.get(acc, 0.0))
@@ -149,7 +155,7 @@ def modal_opening_balance():
         if st.form_submit_button("LƯU SỐ DƯ GỐC", use_container_width=True):
             try:
                 for acc, bal in balances.items():
-                    supabase.table("opening_balances").upsert({"account": acc, "balance": bal}, on_conflict="account").execute()
+                    supabase.table("opening_balances").upsert({"account": acc, "balance": int(bal)}, on_conflict="account").execute()
                 st.success("Đã lưu số dư gốc thành công!")
                 st.rerun()
             except Exception as e:
@@ -200,8 +206,8 @@ def modal_realestate():
         else:
             try:
                 data = {
-                    "project_name": bds_name, "contract_value": gia_tri_hd, "installment_name": dot_tt,
-                    "amount": so_tien_tt, "funding_source": nguon_tien, "due_date": str(ngay_tt),
+                    "project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt,
+                    "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt),
                     "status": trang_thai, "note": ghi_chu
                 }
                 supabase.table("realestate").insert(data).execute()
@@ -245,8 +251,8 @@ def modal_edit_realestate(row_data):
         if st.form_submit_button("CẬP NHẬT BĐS", use_container_width=True):
             try:
                 data = {
-                    "project_name": bds_name, "contract_value": gia_tri_hd, "installment_name": dot_tt,
-                    "amount": so_tien_tt, "funding_source": nguon_tien, "due_date": str(ngay_tt),
+                    "project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt,
+                    "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt),
                     "status": trang_thai, "note": ghi_chu
                 }
                 supabase.table("realestate").update(data).eq("id", row_data['id']).execute()
@@ -279,7 +285,7 @@ def modal_debt():
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
             try:
                 data = {
-                    "purpose": muc_dich, "bank": ngan_hang, "original_principal": tien_vay_ban_dau,
+                    "purpose": muc_dich, "bank": ngan_hang, "original_principal": int(tien_vay_ban_dau),
                     "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
                 }
                 supabase.table("debts").insert(data).execute()
@@ -316,7 +322,7 @@ def modal_edit_debt(row_data):
         if st.form_submit_button("CẬP NHẬT KHOẢN VAY", use_container_width=True):
             try:
                 data = {
-                    "purpose": muc_dich, "bank": ngan_hang, "original_principal": tien_vay_ban_dau,
+                    "purpose": muc_dich, "bank": ngan_hang, "original_principal": int(tien_vay_ban_dau),
                     "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
                 }
                 supabase.table("debts").update(data).eq("id", row_data['id']).execute()
@@ -330,7 +336,7 @@ def modal_stock():
     with st.form("invest_stock_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
-            broker = st.selectbox("Nơi lưu ký (CTCK)", ["TCBS", "SSI", "VPS", "VNDirect", "HSC", "Khác"])
+            broker = st.selectbox("Nơi lưu ký (CTCK)", BROKER_ACCOUNTS + ["Khác"])
         with c2:
             fund_owner_stock = st.selectbox("Thuộc Portfolio", FUNDS)
             
@@ -393,7 +399,7 @@ def modal_savings():
             try:
                 data = {
                     "fund_owner": new_fund, "bank": new_bank, "deposit_date": str(new_date),
-                    "term": new_term, "interest_rate": new_rate, "amount": new_amount
+                    "term": new_term, "interest_rate": new_rate, "amount": int(new_amount)
                 }
                 supabase.table("savings").insert(data).execute()
                 st.success("Đã lưu sổ tiết kiệm mới!")
@@ -431,7 +437,7 @@ def modal_edit_savings(row_data):
             try:
                 data = {
                     "fund_owner": new_fund, "bank": new_bank, "deposit_date": str(new_date),
-                    "term": new_term, "interest_rate": new_rate, "amount": new_amount
+                    "term": new_term, "interest_rate": new_rate, "amount": int(new_amount)
                 }
                 supabase.table("savings").update(data).eq("id", row_data['id']).execute()
                 st.success("Đã cập nhật!")
@@ -551,7 +557,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (5 THẺ KPIS ĐỒNG NHẤT, ĐỘNG THEO THỜI GIAN) ---
+# --- TAB 1: DÒNG TIỀN (TÍCH HỢP TÀI KHOẢN CHỨNG KHOÁN) ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -633,7 +639,7 @@ with tab_cashflow:
                 chi_prior = acc_prior[acc_prior['category'] != 'Lương/Thu nhập']['amount'].sum()
                 base_val = base_val + thu_prior - chi_prior
                 
-        if acc in DEBIT_ACCOUNTS:
+        if acc in DEBIT_ACCOUNTS or acc in BROKER_ACCOUNTS:
             total_debit_opening += base_val
         elif acc in CREDIT_CARDS:
             total_credit_opening += base_val
@@ -647,11 +653,10 @@ with tab_cashflow:
 
     tong_quy = (total_debit_opening + dong_tien_thuan) - total_credit_opening
 
-    # CÂN ĐỐI 5 THẺ KPIS ĐỒNG NHẤT CHIỀU CAO
     kc1, kc2, kc3, kc4, kc5 = st.columns(5)
     with kc1:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">🏦 TK THANH TOÁN</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">🏦 TK THANH TOÁN & CK</div>', unsafe_allow_html=True)
             st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.3rem; font-weight: 700; color: #38bdf8;'>{total_debit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc2:
         with st.container(border=True):
@@ -673,7 +678,6 @@ with tab_cashflow:
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
-    # TRỰC QUAN HÓA DÒNG TIỀN
     if not df_filtered.empty:
         viz1, viz2 = st.columns(2)
         with viz1:
@@ -714,7 +718,6 @@ with tab_cashflow:
                 st.info("Chưa có dữ liệu chi tiêu trong khoảng thời gian này.")
     st.divider()
 
-    # BẢNG GIAO DỊCH
     st.markdown("**LỊCH SỬ GIAO DỊCH (ĐÃ LỌC)**")
     if not df_filtered.empty:
         df_display = df_filtered[['id', 'created_at_dt', 'account', 'category', 'amount', 'note']].copy()
