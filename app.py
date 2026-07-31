@@ -62,7 +62,7 @@ TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7
 CATS = ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"]
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 
-# 3. KHO MODAL (@st.dialog) - TỐI ƯU GIAO DIỆN COLUMNS & STEP=NONE
+# 3. KHO MODAL (@st.dialog)
 @st.dialog("GHI NHẬN DÒNG TIỀN")
 def modal_cashflow():
     with st.form("cashflow_form", clear_on_submit=True):
@@ -107,6 +107,33 @@ def modal_edit_cashflow(row_data):
                 st.rerun()
             except Exception as e:
                 st.error(f"Lỗi: {e}")
+
+@st.dialog("CẬP NHẬT SỐ DƯ ĐẦU KỲ (THÁNG 8)")
+def modal_opening_balance():
+    with st.form("opening_balance_form"):
+        st.markdown("Nhập số dư ban đầu cho các tài khoản tính đến trước ngày bắt đầu theo dõi:")
+        
+        # Lấy dữ liệu cũ nếu có
+        try:
+            res = supabase.table("opening_balances").select("*").execute()
+            old_data = {row['account']: row['balance'] for row in res.data} if res.data else {}
+        except:
+            old_data = {}
+            
+        balances = {}
+        for acc in BANK_ACCOUNTS:
+            val = float(old_data.get(acc, 0.0))
+            balances[acc] = st.number_input(f"Số dư đầu kỳ: {acc} (VND)", min_value=0.0, step=None, value=val)
+            
+        if st.form_submit_button("LƯU SỐ DƯ ĐẦU KỲ", use_container_width=True):
+            try:
+                for acc, bal in balances.items():
+                    # Upsert vào bảng opening_balances
+                    supabase.table("opening_balances").upsert({"account": acc, "balance": bal}, on_conflict="account").execute()
+                st.success("Đã cập nhật số dư đầu kỳ thành công!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi: {e}. Vui lòng đảm bảo bạn đã tạo bảng 'opening_balances' trên Supabase.")
 
 @st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
 def modal_realestate():
@@ -504,40 +531,47 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (NÂNG CẤP FILTER BAR, KPIS & BIỂU ĐỒ TRỰC QUAN) ---
+# --- TAB 1: DÒNG TIỀN (FIX LỖI UI & BỔ SUNG SỐ DƯ ĐẦU KỲ TỪ THÁNG 8) ---
 with tab_cashflow:
-    col_btn, _ = st.columns([1, 3])
-    with col_btn:
+    col_btn1, col_btn2, _ = st.columns([1, 1, 2])
+    with col_btn1:
         if st.button("+ THÊM GIAO DỊCH MỚI", use_container_width=True):
             modal_cashflow()
+    with col_btn2:
+        if st.button("⚙️ CẬP NHẬT SỐ DƯ ĐẦU KỲ", use_container_width=True):
+            modal_opening_balance()
             
     st.markdown("<br/>", unsafe_allow_html=True)
     
-    # 1. advanced filter bar
-    with st.expander("🔍 Bộ lọc & Tùy chọn hiển thị", expanded=True):
-        try:
-            res_all_cf = supabase.table("cashflow").select("*").execute()
-            df_all = pd.DataFrame(res_all_cf.data) if res_all_cf.data else pd.DataFrame()
-        except:
-            df_all = pd.DataFrame()
-            
-        if not df_all.empty:
-            df_all['created_at_dt'] = pd.to_datetime(df_all['created_at'])
-            min_d = df_all['created_at_dt'].min().date()
-            max_d = df_all['created_at_dt'].max().date()
-        else:
-            min_d, max_d = date.today(), date.today()
-            
-        fc1, fc2, fc3 = st.columns(3)
-        with fc1:
-            date_range = st.date_input("Khoảng thời gian", value=(min_d, max_d))
-        with fc2:
-            selected_accounts = st.multiselect("Tài khoản nguồn", BANK_ACCOUNTS, default=BANK_ACCOUNTS)
-        with fc3:
-            available_cats = df_all['category'].unique().tolist() if not df_all.empty else CATS
-            selected_cats = st.multiselect("Phân loại danh mục", available_cats, default=available_cats)
-            
-    # Xử lý lọc dữ liệu
+    # 1. ADVANCED FILTER BAR (ĐÃ GỠ BỎ st.expander ĐỂ TRIỆT TIÊU LỖI _arrow_)
+    try:
+        res_all_cf = supabase.table("cashflow").select("*").execute()
+        df_all = pd.DataFrame(res_all_cf.data) if res_all_cf.data else pd.DataFrame()
+    except:
+        df_all = pd.DataFrame()
+        
+    # Mặc định khoảng thời gian bắt đầu từ 01/08/2026 đến hôm nay
+    default_start = date(2026, 8, 1)
+    default_end = date.today()
+    
+    if not df_all.empty:
+        df_all['created_at_dt'] = pd.to_datetime(df_all['created_at'])
+        min_d = min(default_start, df_all['created_at_dt'].min().date())
+        max_d = max(default_end, df_all['created_at_dt'].max().date())
+    else:
+        min_d, max_d = default_start, default_end
+        
+    st.markdown("#### 🔍 Bộ lọc & Tùy chọn hiển thị")
+    fc1, fc2, fc3 = st.columns(3)
+    with fc1:
+        date_range = st.date_input("Khoảng thời gian", value=(default_start, max_d))
+    with fc2:
+        selected_accounts = st.multiselect("Tài khoản nguồn", BANK_ACCOUNTS, default=BANK_ACCOUNTS)
+    with fc3:
+        available_cats = df_all['category'].unique().tolist() if not df_all.empty else CATS
+        selected_cats = st.multiselect("Phân loại danh mục", available_cats, default=available_cats)
+        
+    # Xử lý lọc dữ liệu giao dịch
     if not df_all.empty:
         df_filtered = df_all.copy()
         df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
@@ -556,29 +590,43 @@ with tab_cashflow:
     else:
         df_filtered = pd.DataFrame()
 
-    # 2. KHU VỰC KPIS DÒNG TIỀN
+    # 2. LẤY SỐ DƯ ĐẦU KỲ VÀ TÍNH KPIS
+    try:
+        res_ob = supabase.table("opening_balances").select("*").execute()
+        opening_data = {row['account']: row['balance'] for row in res_ob.data} if res_ob.data else {}
+    except:
+        opening_data = {}
+        
+    # Tổng số dư đầu kỳ của các tài khoản được chọn trong bộ lọc
+    total_opening = sum([val for acc, val in opening_data.items() if acc in selected_accounts])
+
     if not df_filtered.empty:
-        # Quy ước: Phân loại "Lương/Thu nhập" là Thu, còn lại là Chi (hoặc tùy chỉnh theo logic dữ liệu)
         total_thu = df_filtered[df_filtered['category'] == 'Lương/Thu nhập']['amount'].sum()
         total_chi = df_filtered[df_filtered['category'] != 'Lương/Thu nhập']['amount'].sum()
         dong_tien_thuan = total_thu - total_chi
     else:
         total_thu, total_chi, dong_tien_thuan = 0, 0, 0
 
-    kc1, kc2, kc3 = st.columns(3)
+    tong_quy = total_opening + dong_tien_thuan
+
+    kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">📈 TỔNG THU NHẬP</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.8rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">🏦 SỐ DƯ ĐẦU KỲ</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: #38bdf8;'>{total_opening:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc2:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">📉 TỔNG CHI TIÊU</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.8rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">📈 TỔNG THU (THÁNG 8+)</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc3:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">⚖️ DÒNG TIỀN THUẦN</div>', unsafe_allow_html=True)
-            color_dt = "#10b981" if dong_tien_thuan >= 0 else "#ef4444"
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.8rem; font-weight: 700; color: {color_dt};'>{dong_tien_thuan:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">📉 TỔNG CHI (THÁNG 8+)</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
+    with kc4:
+        with st.container(border=True):
+            st.markdown('<div class="metric-title">⚖️ TỔNG QUỸ HIỆN TẠI</div>', unsafe_allow_html=True)
+            color_dt = "#10b981" if tong_quy >= 0 else "#ef4444"
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: {color_dt};'>{tong_quy:,.0f} ₫</div>", unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
