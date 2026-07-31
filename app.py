@@ -64,7 +64,8 @@ def color_profit_loss(val):
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
 BANK_ACCOUNTS = ["VCB chồng", "TCB chồng", "HSBC chồng", "UOB chồng", "UOB vợ", "TCB vợ"]
-TERMS = ["Không kỳ hạn", "1 Tháng", "3 Tháng", "6 Tháng", "9 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
+# Cập nhật danh sách kỳ hạn theo yêu cầu
+TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
 
 # 3. KHO MODAL (@st.dialog)
 @st.dialog("GHI NHẬN DÒNG TIỀN")
@@ -240,7 +241,6 @@ with tab_cashflow:
                 use_container_width=True, hide_index=True
             )
             
-            # Sửa lỗi hiển thị UI: Bỏ biểu tượng cảm xúc khỏi st.expander
             with st.expander("TÙY CHỌN: XÓA GIAO DỊCH NHẬP SAI"):
                 del_id = st.selectbox("Chọn giao dịch cần xóa (Dựa theo Thời gian & Số tiền):", 
                                       df_cf['id'].tolist(), 
