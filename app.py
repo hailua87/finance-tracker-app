@@ -183,37 +183,79 @@ def modal_opening_balance():
             except Exception as e:
                 st.error(f"Lỗi: {e}. Đảm bảo bạn đã tạo bảng 'opening_balances' trên Supabase.")
 
-@st.dialog("KHIẾN NGHỊ / THÊM CỔ PHIẾU VÀO DANH MỤC")
-def modal_add_portfolio_stock():
-    with st.form("add_portfolio_stock_form", clear_on_submit=True):
+@st.dialog("ĐẶT LỆNH MUA / BÁN CỔ PHIẾU")
+def modal_stock():
+    with st.form("invest_stock_form", clear_on_submit=True):
         c1, c2 = st.columns(2)
         with c1:
             broker = st.selectbox("Công ty CK", BROKER_ACCOUNTS)
         with c2:
-            ticker = st.text_input("Mã Cổ phiếu (VD: VIB, MBB, VCI)").upper()
+            fund_owner_stock = st.selectbox("Portfolio", FUNDS)
             
+        ticker = st.text_input("Mã cổ phiếu (VD: VIB, MBB, VCI)").upper()
+        action = st.radio("Loại lệnh", ["Mua", "Bán"], horizontal=True)
+        
         c3, c4 = st.columns(2)
         with c3:
-            volume = st.number_input("Khối lượng nắm giữ", min_value=0.0, step=None, value=1000.0)
+            volume = st.number_input("Khối lượng (CP)", min_value=100.0, step=None, value=100.0)
         with c4:
-            avg_price = st.number_input("Giá vốn trung bình (VND)", min_value=0.0, step=None, value=20000.0)
+            price = st.number_input("Giá khớp (VND)", min_value=0.0, step=None)
             
-        if st.form_submit_button("LƯU CỔ PHIẾU VÀO DANH MỤC", use_container_width=True):
+        if st.form_submit_button("LƯU LỆNH CỔ PHIẾU", use_container_width=True):
             if not ticker.strip():
-                st.error("Vui lòng nhập Mã Cổ phiếu!")
+                st.error("Vui lòng nhập mã cổ phiếu!")
             else:
                 try:
                     data = {
-                        "ticker": ticker.strip(),
                         "broker": broker,
+                        "fund_owner": fund_owner_stock,
+                        "ticker": ticker.strip(),
+                        "action": action,
                         "volume": int(volume),
-                        "avg_price": float(avg_price)
+                        "price": float(price)
                     }
-                    supabase.table("portfolio_stocks").upsert(data, on_conflict="ticker,broker").execute()
-                    st.success(f"Đã lưu thành công cổ phiếu {ticker}!")
+                    supabase.table("stocks").insert(data).execute()
+                    st.success(f"Đã ghi nhận lệnh {action} {int(volume)} CP {ticker} thành công!")
                     st.rerun()
                 except Exception as e:
-                    st.error(f"Lỗi lưu danh mục: {e}. Đảm bảo bạn đã tạo bảng 'portfolio_stocks' trên Supabase.")
+                    st.error(f"Lỗi khi lưu lệnh: {e}. Đảm bảo bạn đã tạo bảng 'stocks' trên Supabase.")
+
+@st.dialog("ĐẶT LỆNH MUA / BÁN CHỨNG CHỈ QUỸ (CCQ)")
+def modal_ccq():
+    with st.form("invest_ccq_form", clear_on_submit=True):
+        c1, c2 = st.columns(2)
+        with c1:
+            platform = st.selectbox("Nền tảng / CTCK", ["TCBS", "Fmarket", "DragonX", "SSI", "VNDirect"])
+        with c2:
+            fund_owner_ccq = st.selectbox("Portfolio", FUNDS)
+            
+        fund_ticker = st.text_input("Mã Quỹ (VD: DCDS, VESAF, DCBC)").upper()
+        action_ccq = st.radio("Loại lệnh Quỹ", ["Mua", "Bán"], horizontal=True)
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            volume_ccq = st.number_input("Số lượng CCQ", min_value=0.01, step=None, format="%.2f", value=10.0)
+        with c4:
+            nav_price = st.number_input("Giá NAV / Đơn giá (VND)", min_value=0.0, step=None)
+            
+        if st.form_submit_button("LƯU LỆNH QUỸ", use_container_width=True):
+            if not fund_ticker.strip():
+                st.error("Vui lòng nhập mã quỹ!")
+            else:
+                try:
+                    data = {
+                        "platform": platform,
+                        "fund_owner": fund_owner_ccq,
+                        "ticker": fund_ticker.strip(),
+                        "action": action_ccq,
+                        "volume": float(volume_ccq),
+                        "price": float(nav_price)
+                    }
+                    supabase.table("ccq_funds").insert(data).execute()
+                    st.success(f"Đã ghi nhận lệnh {action_ccq} quỹ {fund_ticker} thành công!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Lỗi khi lưu lệnh quỹ: {e}. Đảm bảo bạn đã tạo bảng 'ccq_funds' trên Supabase.")
 
 @st.dialog("THÊM KHOẢN GỬI TIẾT KIỆM")
 def modal_savings():
@@ -281,16 +323,37 @@ with tab_home:
     except:
         no_khoan_vay = 0
 
-    tong_ccq = 0
+    # Tính giá trị cổ phiếu hiện tại
+    tong_cp = 0
     try:
-        res_pf = supabase.table("portfolio_stocks").select("*").execute()
-        if res_pf.data:
-            df_pf_calc = pd.DataFrame(res_pf.data)
-            tong_cp = (df_pf_calc['volume'] * df_pf_calc['avg_price']).sum()
-        else:
-            tong_cp = 0
+        res_stk = supabase.table("stocks").select("*").execute()
+        if res_stk.data:
+            df_stk = pd.DataFrame(res_stk.data)
+            for ticker, grp in df_stk.groupby('ticker'):
+                buy_vol = grp[grp['action'] == 'Mua']['volume'].sum()
+                sell_vol = grp[grp['action'] == 'Bán']['volume'].sum()
+                net_vol = buy_vol - sell_vol
+                buy_val = (grp[grp['action'] == 'Mua']['volume'] * grp[grp['action'] == 'Mua']['price']).sum()
+                avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+                tong_cp += net_vol * avg_price
     except:
         tong_cp = 0
+
+    # Tính giá trị chứng chỉ quỹ hiện tại
+    tong_ccq = 0
+    try:
+        res_fund = supabase.table("ccq_funds").select("*").execute()
+        if res_fund.data:
+            df_fund = pd.DataFrame(res_fund.data)
+            for ticker, grp in df_fund.groupby('ticker'):
+                buy_vol = grp[grp['action'] == 'Mua']['volume'].sum()
+                sell_vol = grp[grp['action'] == 'Bán']['volume'].sum()
+                net_vol = buy_vol - sell_vol
+                buy_val = (grp[grp['action'] == 'Mua']['volume'] * grp[grp['action'] == 'Mua']['price']).sum()
+                avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+                tong_ccq += net_vol * avg_price
+    except:
+        tong_ccq = 0
 
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tai_san_rong = tong_tai_san - no_khoan_vay
@@ -368,7 +431,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (SỬA TRIỆT ĐỂ LỖI RANGEERROR BẰNG 2 Ô NGÀY ĐỘC LẬP) ---
+# --- TAB 1: DÒNG TIỀN ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -392,7 +455,6 @@ with tab_cashflow:
     st.markdown("#### 🔍 Bộ lọc & Tùy chọn hiển thị")
     fc1, fc2, fc3 = st.columns([2, 2, 2])
     with fc1:
-        # Tách thành 2 ô chọn ngày riêng biệt để loại bỏ hoàn toàn RangeError trên Streamlit
         sub_c1, sub_c2 = st.columns(2)
         with sub_c1:
             start_date = st.date_input("Từ ngày", value=default_start)
@@ -560,61 +622,165 @@ with tab_cashflow:
     else:
         st.info("Không có giao dịch nào phù hợp với bộ lọc hiện tại.")
 
-# --- TAB 2: ĐẦU TƯ (TÁCH BIỆT BẢNG CỔ PHIẾU CỐ ĐỊNH) ---
+# --- TAB 2: ĐẦU TƯ (CỔ PHIẾU & CHỨNG CHỈ QUỸ) ---
 with tab_invest:
-    subtab_stock, subtab_ccq = st.tabs(["CỔ PHIẾU", "CHỨNG CHỈ QUỸ"])
+    subtab_stock, subtab_ccq = st.tabs(["📈 CỔ PHIẾU", "📊 CHỨNG CHỈ QUỸ (CCQ)"])
+    
     with subtab_stock:
         col_btn2, _ = st.columns([1.5, 3])
         with col_btn2:
-            if st.button("+ THÊM CỔ PHIẾU VÀO DANH MỤC", use_container_width=True):
-                modal_add_portfolio_stock()
+            if st.button("+ ĐẶT LỆNH MUA / BÁN CP", use_container_width=True):
+                modal_stock()
                 
         st.markdown("<br/>", unsafe_allow_html=True)
-        st.markdown("**DANH MỤC CỔ PHIẾU ĐANG NẮM GIỮ**")
+        
+        # Sub-tabs hiển thị danh mục tồn kho vs lịch sử lệnh
+        stk_sub1, stk_sub2 = st.tabs(["Danh mục tồn kho hiện tại", "Lịch sử đặt lệnh"])
         
         try:
-            res_pf = supabase.table("portfolio_stocks").select("*").execute()
-            df_pf = pd.DataFrame(res_pf.data) if res_pf.data else pd.DataFrame()
+            res_stk = supabase.table("stocks").select("*").execute()
+            df_stk = pd.DataFrame(res_stk.data) if res_stk.data else pd.DataFrame()
         except:
-            df_pf = pd.DataFrame()
+            df_stk = pd.DataFrame()
             
-        if not df_pf.empty and 'ticker' in df_pf.columns:
-            df_pf['Tổng giá vốn (VND)'] = df_pf['volume'] * df_pf['avg_price']
-            df_pf_display = df_pf.rename(columns={
-                'ticker': 'Mã CK',
-                'broker': 'Công ty CK',
-                'volume': 'Khối lượng',
-                'avg_price': 'Giá vốn TB (VND)'
-            })
-            
-            st.dataframe(
-                df_pf_display[['id', 'Mã CK', 'Công ty CK', 'Khối lượng', 'Giá vốn TB (VND)', 'Tổng giá vốn (VND)']],
-                column_config={
-                    "id": None,
-                    "Khối lượng": st.column_config.NumberColumn("Khối lượng", format="%,.0f"),
-                    "Giá vốn TB (VND)": st.column_config.NumberColumn("Giá vốn TB (VND)", format="%,.0f ₫"),
-                    "Tổng giá vốn (VND)": st.column_config.NumberColumn("Tổng giá vốn (VND)", format="%,.0f ₫")
-                },
-                use_container_width=True, hide_index=True
-            )
-            
-            st.markdown("---")
-            st.markdown("### ⚙️ QUẢN LÝ DANH MỤC CỔ PHIẾU")
-            stk_id = st.selectbox(
-                "Chọn cổ phiếu để xóa:", 
-                df_pf['id'].tolist(), 
-                format_func=lambda x: f"{df_pf[df_pf['id'] == x]['ticker'].values[0]} | {df_pf[df_pf['id'] == x]['broker'].values[0]} | Số lượng: {df_pf[df_pf['id'] == x]['volume'].values[0]:,.0f}",
-                key="select_stk"
-            )
-            if st.button("❌ XÓA CỔ PHIẾU NÀY KHI BÁN HẾT", key="del_stk"):
-                supabase.table("portfolio_stocks").delete().eq("id", stk_id).execute()
-                st.success("Đã xóa khỏi danh mục!")
-                st.rerun()
-        else:
-            st.info("Chưa có cổ phiếu nào trong danh mục. Bấm nút '+ Thêm cổ phiếu vào danh mục' để cập nhật mã CP đang sở hữu.")
+        with stk_sub1:
+            if not df_stk.empty and 'ticker' in df_stk.columns:
+                summary_list = []
+                for ticker, grp in df_stk.groupby('ticker'):
+                    buy_rows = grp[grp['action'] == 'Mua']
+                    sell_rows = grp[grp['action'] == 'Bán']
+                    
+                    buy_vol = buy_rows['volume'].sum()
+                    sell_vol = sell_rows['volume'].sum()
+                    net_vol = buy_vol - sell_vol
+                    
+                    buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
+                    avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+                    total_cost = net_vol * avg_price
+                    broker_name = grp['broker'].iloc[0] if 'broker' in grp.columns else 'N/A'
+                    
+                    if net_vol > 0:
+                        summary_list.append({
+                            "Mã CK": ticker,
+                            "Công ty CK": broker_name,
+                            "Khối lượng tồn": net_vol,
+                            "Giá vốn TB (VND)": avg_price,
+                            "Tổng giá vốn (VND)": total_cost
+                        })
+                        
+                if summary_list:
+                    df_portfolio = pd.DataFrame(summary_list)
+                    st.dataframe(
+                        df_portfolio,
+                        column_config={
+                            "Khối lượng tồn": st.column_config.NumberColumn("Khối lượng tồn", format="%,.0f"),
+                            "Giá vốn TB (VND)": st.column_config.NumberColumn("Giá vốn TB (VND)", format="%,.0f ₫"),
+                            "Tổng giá vốn (VND)": st.column_config.NumberColumn("Tổng giá vốn (VND)", format="%,.0f ₫")
+                        },
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.info("Hiện không có cổ phiếu nào trong danh mục (Khối lượng tồn = 0).")
+            else:
+                st.info("Chưa có lịch sử giao dịch cổ phiếu. Bấm '+ Đặt lệnh mua / bán CP' để bắt đầu.")
+
+        with stk_sub2:
+            if not df_stk.empty:
+                df_stk_display = df_stk[['id', 'broker', 'fund_owner', 'ticker', 'action', 'volume', 'price']].rename(columns={
+                    'broker': 'CTCK', 'fund_owner': 'Portfolio', 'ticker': 'Mã CK', 'action': 'Lệnh', 'volume': 'Khối lượng', 'price': 'Giá khớp'
+                })
+                st.dataframe(
+                    df_stk_display,
+                    column_config={
+                        "id": None,
+                        "Khối lượng": st.column_config.NumberColumn("Khối lượng", format="%,.0f"),
+                        "Giá khớp": st.column_config.NumberColumn("Giá khớp", format="%,.0f ₫")
+                    },
+                    use_container_width=True, hide_index=True
+                )
+                
+                st.markdown("---")
+                del_stk_id = st.selectbox("Chọn ID lệnh để xóa nếu nhập sai:", df_stk['id'].tolist(), key="del_stk_id")
+                if st.button("❌ XÓA LỆNH NÀY", key="btn_del_stk"):
+                    supabase.table("stocks").delete().eq("id", del_stk_id).execute()
+                    st.success("Đã xóa lệnh thành công!")
+                    st.rerun()
+            else:
+                st.info("Chưa có lịch sử lệnh nào.")
 
     with subtab_ccq:
-        st.info("Danh mục Chứng chỉ quỹ hiện đang trống.")
+        col_btn_ccq, _ = st.columns([1.5, 3])
+        with col_btn_ccq:
+            if st.button("+ ĐẶT LỆNH MUA / BÁN CCQ", use_container_width=True):
+                modal_ccq()
+                
+        st.markdown("<br/>", unsafe_allow_html=True)
+        
+        ccq_sub1, ccq_sub2 = st.tabs(["Danh mục CCQ tồn kho", "Lịch sử lệnh quỹ"])
+        
+        try:
+            res_fund = supabase.table("ccq_funds").select("*").execute()
+            df_fund = pd.DataFrame(res_fund.data) if res_fund.data else pd.DataFrame()
+        except:
+            df_fund = pd.DataFrame()
+            
+        with ccq_sub1:
+            if not df_fund.empty and 'ticker' in df_fund.columns:
+                fund_summary = []
+                for ticker, grp in df_fund.groupby('ticker'):
+                    buy_rows = grp[grp['action'] == 'Mua']
+                    sell_rows = grp[grp['action'] == 'Bán']
+                    
+                    buy_vol = buy_rows['volume'].sum()
+                    sell_vol = sell_rows['volume'].sum()
+                    net_vol = buy_vol - sell_vol
+                    
+                    buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
+                    avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+                    total_cost = net_vol * avg_price
+                    platform_name = grp['platform'].iloc[0] if 'platform' in grp.columns else 'N/A'
+                    
+                    if net_vol > 0:
+                        fund_summary.append({
+                            "Mã Quỹ": ticker,
+                            "Nền tảng": platform_name,
+                            "Số lượng tồn": net_vol,
+                            "Giá NAV TB (VND)": avg_price,
+                            "Tổng giá trị (VND)": total_cost
+                        })
+                        
+                if fund_summary:
+                    df_fund_port = pd.DataFrame(fund_summary)
+                    st.dataframe(
+                        df_fund_port,
+                        column_config={
+                            "Số lượng tồn": st.column_config.NumberColumn("Số lượng tồn", format="%,.2f"),
+                            "Giá NAV TB (VND)": st.column_config.NumberColumn("Giá NAV TB (VND)", format="%,.0f ₫"),
+                            "Tổng giá trị (VND)": st.column_config.NumberColumn("Tổng giá trị (VND)", format="%,.0f ₫")
+                        },
+                        use_container_width=True, hide_index=True
+                    )
+                else:
+                    st.info("Hiện không có chứng chỉ quỹ nào trong danh mục.")
+            else:
+                st.info("Chưa có giao dịch chứng chỉ quỹ nào. Bấm '+ Đặt lệnh mua / bán CCQ' để bắt đầu.")
+
+        with ccq_sub2:
+            if not df_fund.empty:
+                df_fund_display = df_fund[['id', 'platform', 'fund_owner', 'ticker', 'action', 'volume', 'price']].rename(columns={
+                    'platform': 'Nền tảng', 'fund_owner': 'Portfolio', 'ticker': 'Mã Quỹ', 'action': 'Lệnh', 'volume': 'Số lượng', 'price': 'Giá NAV'
+                })
+                st.dataframe(
+                    df_fund_display,
+                    column_config={
+                        "id": None,
+                        "Số lượng": st.column_config.NumberColumn("Số lượng", format="%,.2f"),
+                        "Giá NAV": st.column_config.NumberColumn("Giá NAV", format="%,.0f ₫")
+                    },
+                    use_container_width=True, hide_index=True
+                )
+            else:
+                st.info("Chưa có lịch sử lệnh quỹ nào.")
 
 # --- TAB 3: TIẾT KIỆM ---
 with tab_savings:
