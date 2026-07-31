@@ -504,54 +504,163 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN ---
+# --- TAB 1: DÒNG TIỀN (NÂNG CẤP FILTER BAR, KPIS & BIỂU ĐỒ TRỰC QUAN) ---
 with tab_cashflow:
     col_btn, _ = st.columns([1, 3])
     with col_btn:
         if st.button("+ THÊM GIAO DỊCH MỚI", use_container_width=True):
             modal_cashflow()
             
-    st.markdown("**LỊCH SỬ GIAO DỊCH (TỪ DATABASE)**")
-    try:
-        res_cf = supabase.table("cashflow").select("*").order("created_at", desc=True).limit(20).execute()
-        if res_cf.data:
-            df_cf = pd.DataFrame(res_cf.data)
-            df_cf['created_at'] = pd.to_datetime(df_cf['created_at']).dt.strftime('%d/%m/%Y %H:%M')
-            df_display = df_cf[['id', 'created_at', 'account', 'category', 'amount', 'note']].rename(
-                columns={'created_at': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'}
-            )
+    st.markdown("<br/>", unsafe_allow_html=True)
+    
+    # 1. advanced filter bar
+    with st.expander("🔍 Bộ lọc & Tùy chọn hiển thị", expanded=True):
+        try:
+            res_all_cf = supabase.table("cashflow").select("*").execute()
+            df_all = pd.DataFrame(res_all_cf.data) if res_all_cf.data else pd.DataFrame()
+        except:
+            df_all = pd.DataFrame()
             
-            st.dataframe(
-                df_display,
-                column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
-                use_container_width=True, hide_index=True
-            )
-            
-            st.markdown("---")
-            st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BẢNG")
-            
-            action_id = st.selectbox(
-                "Chọn giao dịch để cập nhật:", 
-                df_cf['id'].tolist(), 
-                format_func=lambda x: f"{df_cf[df_cf['id'] == x]['created_at'].values[0]} | {df_cf[df_cf['id'] == x]['category'].values[0]} | {df_cf[df_cf['id'] == x]['amount'].values[0]:,.0f} ₫",
-                key="select_cf"
-            )
-            
-            selected_row = df_cf[df_cf['id'] == action_id].iloc[0]
-            
-            col_a1, col_a2, _ = st.columns([1.5, 1.5, 3])
-            with col_a1:
-                if st.button("✏️ SỬA GIAO DỊCH NÀY", use_container_width=True, key="edit_cf"):
-                    modal_edit_cashflow(selected_row)
-            with col_a2:
-                if st.button("❌ XÓA GIAO DỊCH NÀY", use_container_width=True, key="del_cf"):
-                    supabase.table("cashflow").delete().eq("id", action_id).execute()
-                    st.success("Đã xóa giao dịch!")
-                    st.rerun()
+        if not df_all.empty:
+            df_all['created_at_dt'] = pd.to_datetime(df_all['created_at'])
+            min_d = df_all['created_at_dt'].min().date()
+            max_d = df_all['created_at_dt'].max().date()
         else:
-            st.info("Chưa có giao dịch nào được ghi nhận.")
-    except Exception as e:
-        st.error(f"Không thể tải dữ liệu dòng tiền: {e}")
+            min_d, max_d = date.today(), date.today()
+            
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            date_range = st.date_input("Khoảng thời gian", value=(min_d, max_d))
+        with fc2:
+            selected_accounts = st.multiselect("Tài khoản nguồn", BANK_ACCOUNTS, default=BANK_ACCOUNTS)
+        with fc3:
+            available_cats = df_all['category'].unique().tolist() if not df_all.empty else CATS
+            selected_cats = st.multiselect("Phân loại danh mục", available_cats, default=available_cats)
+            
+    # Xử lý lọc dữ liệu
+    if not df_all.empty:
+        df_filtered = df_all.copy()
+        df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
+        
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            start_date, end_date = date_range
+            df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
+        elif isinstance(date_range, tuple) and len(date_range) == 1:
+            start_date = date_range[0]
+            df_filtered = df_filtered[df_filtered['date_only'] >= start_date]
+            
+        if selected_accounts:
+            df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
+        if selected_cats:
+            df_filtered = df_filtered[df_filtered['category'].isin(selected_cats)]
+    else:
+        df_filtered = pd.DataFrame()
+
+    # 2. KHU VỰC KPIS DÒNG TIỀN
+    if not df_filtered.empty:
+        # Quy ước: Phân loại "Lương/Thu nhập" là Thu, còn lại là Chi (hoặc tùy chỉnh theo logic dữ liệu)
+        total_thu = df_filtered[df_filtered['category'] == 'Lương/Thu nhập']['amount'].sum()
+        total_chi = df_filtered[df_filtered['category'] != 'Lương/Thu nhập']['amount'].sum()
+        dong_tien_thuan = total_thu - total_chi
+    else:
+        total_thu, total_chi, dong_tien_thuan = 0, 0, 0
+
+    kc1, kc2, kc3 = st.columns(3)
+    with kc1:
+        with st.container(border=True):
+            st.markdown('<div class="metric-title">📈 TỔNG THU NHẬP</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.8rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
+    with kc2:
+        with st.container(border=True):
+            st.markdown('<div class="metric-title">📉 TỔNG CHI TIÊU</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.8rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
+    with kc3:
+        with st.container(border=True):
+            st.markdown('<div class="metric-title">⚖️ DÒNG TIỀN THUẦN</div>', unsafe_allow_html=True)
+            color_dt = "#10b981" if dong_tien_thuan >= 0 else "#ef4444"
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.8rem; font-weight: 700; color: {color_dt};'>{dong_tien_thuan:,.0f} ₫</div>", unsafe_allow_html=True)
+
+    st.markdown("<br/>", unsafe_allow_html=True)
+
+    # 3. TRỰC QUAN HÓA DÒNG TIỀN (2 BIỂU ĐỒ SIDE-BY-SIDE)
+    if not df_filtered.empty:
+        viz1, viz2 = st.columns(2)
+        with viz1:
+            st.markdown("##### 📊 Xu hướng Thu vs Chi theo thời gian")
+            df_filtered['Ngay'] = df_filtered['created_at_dt'].dt.strftime('%d/%m/%Y')
+            df_filtered['Loại giao dịch'] = df_filtered['category'].apply(lambda x: 'Thu nhập' if x == 'Lương/Thu nhập' else 'Chi tiêu')
+            df_trend = df_filtered.groupby(['Ngay', 'Loại giao dịch'])['amount'].sum().reset_index()
+            
+            fig_trend = px.bar(
+                df_trend, x='Ngay', y='amount', color='Loại giao dịch',
+                barmode='group',
+                color_discrete_map={'Thu nhập': '#10b981', 'Chi tiêu': '#ef4444'}
+            )
+            fig_trend.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font_color="#f8fafc", margin=dict(t=20, b=20, l=20, r=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+        with viz2:
+            st.markdown("##### 🍩 Tỷ trọng chi tiêu theo danh mục")
+            df_chi = df_filtered[df_filtered['category'] != 'Lương/Thu nhập']
+            if not df_chi.empty:
+                df_cat = df_chi.groupby('category')['amount'].sum().reset_index()
+                fig_donut = px.pie(
+                    df_cat, names='category', values='amount', hole=0.5,
+                    color_discrete_sequence=['#38bdf8', '#f59e0b', '#8b5cf6', '#ec4899', '#10b981']
+                )
+                fig_donut.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font_color="#f8fafc", margin=dict(t=20, b=20, l=20, r=20),
+                    legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
+                )
+                fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+                st.plotly_chart(fig_donut, use_container_width=True)
+            else:
+                st.info("Chưa có dữ liệu chi tiêu trong khoảng thời gian này.")
+    st.divider()
+
+    # 4. BẢNG LỊCH SỬ GIAO DỊCH ĐÃ LỌC
+    st.markdown("**LỊCH SỬ GIAO DỊCH (ĐÃ LỌC)**")
+    if not df_filtered.empty:
+        df_display = df_filtered[['id', 'created_at_dt', 'account', 'category', 'amount', 'note']].copy()
+        df_display['created_at_dt'] = df_display['created_at_dt'].dt.strftime('%d/%m/%Y %H:%M')
+        df_display = df_display.rename(
+            columns={'created_at_dt': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'}
+        )
+        
+        st.dataframe(
+            df_display,
+            column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
+            use_container_width=True, hide_index=True
+        )
+        
+        st.markdown("---")
+        st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BẢNG")
+        
+        action_id = st.selectbox(
+            "Chọn giao dịch để cập nhật:", 
+            df_filtered['id'].tolist(), 
+            format_func=lambda x: f"{pd.to_datetime(df_filtered[df_filtered['id'] == x]['created_at'].values[0]).strftime('%d/%m/%Y %H:%M')} | {df_filtered[df_filtered['id'] == x]['category'].values[0]} | {df_filtered[df_filtered['id'] == x]['amount'].values[0]:,.0f} ₫",
+            key="select_cf"
+        )
+        
+        selected_row = df_filtered[df_filtered['id'] == action_id].iloc[0]
+        
+        col_a1, col_a2, _ = st.columns([1.5, 1.5, 3])
+        with col_a1:
+            if st.button("✏️ SỬA GIAO DỊCH NÀY", use_container_width=True, key="edit_cf"):
+                modal_edit_cashflow(selected_row)
+        with col_a2:
+            if st.button("❌ XÓA GIAO DỊCH NÀY", use_container_width=True, key="del_cf"):
+                supabase.table("cashflow").delete().eq("id", action_id).execute()
+                st.success("Đã xóa giao dịch!")
+                st.rerun()
+    else:
+        st.info("Không có giao dịch nào phù hợp với bộ lọc hiện tại.")
 
 # --- TAB 2: ĐẦU TƯ ---
 with tab_invest:
