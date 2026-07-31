@@ -56,8 +56,9 @@ def color_profit_loss(val):
     color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#94a3b8'
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
-DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "UOB vợ", "TCB vợ"]
-CREDIT_CARDS = ["HSBC chồng", "UOB chồng"]
+# Phân tách chuẩn xác: Tài khoản thanh toán vs Thẻ tín dụng (UOB vợ đã chuyển sang Thẻ tín dụng)
+DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "TCB vợ"]
+CREDIT_CARDS = ["UOB vợ", "UOB chồng", "HSBC chồng"]
 BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS
 
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
@@ -140,7 +141,7 @@ def modal_opening_balance():
             val = float(old_data.get(acc, 0.0))
             balances[acc] = st.number_input(f"{acc} (VND)", min_value=0.0, step=None, value=val)
             
-        st.markdown("##### 💳 Thẻ tín dụng HSBC / UOB (Dư nợ gốc)")
+        st.markdown("##### 💳 Thẻ tín dụng (UOB, HSBC) (Dư nợ gốc)")
         for acc in CREDIT_CARDS:
             val = float(old_data.get(acc, 0.0))
             balances[acc] = st.number_input(f"Dư nợ {acc} (VND)", min_value=0.0, step=None, value=val)
@@ -550,7 +551,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (CÂN ĐỐI 5 THẺ KPIS ĐỒNG NHẤT CHIỀU CAO) ---
+# --- TAB 1: DÒNG TIỀN (5 THẺ KPIS ĐỒNG NHẤT, ĐỘNG THEO THỜI GIAN) ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -646,7 +647,7 @@ with tab_cashflow:
 
     tong_quy = (total_debit_opening + dong_tien_thuan) - total_credit_opening
 
-    # CÂN ĐỐI 5 THẺ KPIS ĐỒNG NHẤT CHIỀU CAO (CHIA THÀNH 5 CỘT RIÊNG BIỆT)
+    # CÂN ĐỐI 5 THẺ KPIS ĐỒNG NHẤT CHIỀU CAO
     kc1, kc2, kc3, kc4, kc5 = st.columns(5)
     with kc1:
         with st.container(border=True):
