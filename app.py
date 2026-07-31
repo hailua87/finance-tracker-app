@@ -122,27 +122,31 @@ def modal_debt():
         muc_dich = st.text_input("Mục đích vay (VD: Chung cư Q7 Riverside)")
         ngan_hang = st.selectbox("Ngân hàng cho vay", BANK_ACCOUNTS + ["Khác"])
         
-        st.markdown("**Thông số tính toán (Cập nhật theo thực tế)**")
-        du_no = st.number_input("Dư nợ gốc HIỆN TẠI (VND)", min_value=0, step=10000000, value=1800000000)
-        thang_con_lai = st.number_input("Thời gian vay CÒN LẠI (Tháng)", min_value=1, step=1, value=180)
+        st.markdown("**Thông số khởi tạo gốc (Chỉ nhập 1 lần)**")
+        tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0, step=10000000, value=1800000000)
+        tong_thoi_gian = st.number_input("Tổng thời gian vay (Tháng)", min_value=1, step=1, value=180)
+        ngay_giai_ngan = st.date_input("Ngày giải ngân / Bắt đầu vay")
+        
+        st.markdown("**Thông số biến động**")
         lai_suat = st.number_input("Lãi suất HIỆN HÀNH (%/năm)", min_value=0.0, format="%.2f", value=7.3)
         
-        st.info("💡 Gốc & Lãi sẽ được hệ thống tự động tính theo công thức dư nợ giảm dần.")
+        st.info("💡 Hệ thống sẽ tự động trừ lùi dư nợ mỗi tháng. Bạn chỉ cần vào cập nhật khi Lãi suất thay đổi hoặc Trả nợ trước hạn.")
         
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
             try:
                 data = {
                     "purpose": muc_dich,
                     "bank": ngan_hang,
-                    "remaining_principal": du_no,
-                    "remaining_months": thang_con_lai,
+                    "original_principal": tien_vay_ban_dau,
+                    "total_months": tong_thoi_gian,
+                    "start_date": str(ngay_giai_ngan),
                     "interest_rate": lai_suat
                 }
                 supabase.table("debts").insert(data).execute()
                 st.success("Đã ghi nhận khoản vay mới!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Lỗi khi lưu (Hãy đảm bảo bạn đã tạo bảng 'debts' trên Supabase): {e}")
+                st.error(f"Lỗi khi lưu. Hãy đảm bảo bảng 'debts' đã cập nhật cột mới: {e}")
 
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
@@ -204,17 +208,28 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 
 # --- TAB 0: TỔNG QUAN ---
 with tab_home:
-    # Fetch Tiết kiệm
+    # 1. Fetch Tiết kiệm
     try:
         res_savings = supabase.table("savings").select("amount").execute()
         tong_tiet_kiem = sum([row["amount"] for row in res_savings.data]) if res_savings.data else 0
     except:
         tong_tiet_kiem = 0
         
-    # Fetch Nợ khoản vay
+    # 2. Fetch Nợ Khoản Vay & Tính Dư nợ thời gian thực
     try:
-        res_debts = supabase.table("debts").select("remaining_principal").execute()
-        no_khoan_vay = sum([row["remaining_principal"] for row in res_debts.data]) if res_debts.data else 0
+        res_debts = supabase.table("debts").select("*").execute()
+        no_khoan_vay = 0
+        if res_debts.data:
+            df_overview_debts = pd.DataFrame(res_debts.data)
+            today_dt = pd.to_datetime(date.today())
+            for index, row in df_overview_debts.iterrows():
+                start_dt = pd.to_datetime(row['start_date'])
+                months_passed = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
+                months_passed = max(0, min(months_passed, row['total_months'])) # Đảm bảo số tháng trong giới hạn
+                
+                goc_co_dinh = row['original_principal'] / row['total_months']
+                du_no_thuc_te = row['original_principal'] - (goc_co_dinh * months_passed)
+                no_khoan_vay += du_no_thuc_te
     except:
         no_khoan_vay = 0
 
@@ -389,27 +404,32 @@ with tab_realestate:
     except:
         df_vay = pd.DataFrame()
 
-    if not df_vay.empty and "remaining_principal" in df_vay.columns:
-        # Đổi tên cột hiển thị
-        df_vay = df_vay.rename(columns={
-            "purpose": "Mục đích", 
-            "bank": "Ngân hàng", 
-            "remaining_principal": "Dư nợ hiện tại (VND)", 
-            "remaining_months": "Tháng còn lại", 
-            "interest_rate": "Lãi suất (%/năm)"
-        })
+    if not df_vay.empty and "original_principal" in df_vay.columns:
         
-        # LOGIC TÀI CHÍNH TỰ ĐỘNG TÍNH TOÁN (Dư nợ giảm dần, Gốc chia đều)
-        df_vay["Gốc tháng (VND)"] = df_vay["Dư nợ hiện tại (VND)"] / df_vay["Tháng còn lại"]
-        df_vay["Lãi tháng (VND)"] = df_vay["Dư nợ hiện tại (VND)"] * (df_vay["Lãi suất (%/năm)"] / 100 / 12)
-        df_vay["Tổng phải trả (Tháng)"] = df_vay["Gốc tháng (VND)"] + df_vay["Lãi tháng (VND)"]
+        # LOGIC TÀI CHÍNH TỰ ĐỘNG (Amortization)
+        today = pd.to_datetime(date.today())
+        df_vay['start_date'] = pd.to_datetime(df_vay['start_date'])
+        
+        # 1. Tính số tháng đã trôi qua
+        df_vay['Tháng đã trả'] = (today.year - df_vay['start_date'].dt.year) * 12 + (today.month - df_vay['start_date'].dt.month)
+        df_vay['Tháng đã trả'] = df_vay.apply(lambda x: max(0, min(x['Tháng đã trả'], x['total_months'])), axis=1) # Chặn giới hạn tháng
+        
+        # 2. Nội suy các thông số tài chính của tháng hiện tại
+        df_vay["Gốc cố định/Tháng"] = df_vay["original_principal"] / df_vay["total_months"]
+        df_vay["Dư nợ HIỆN TẠI"] = df_vay["original_principal"] - (df_vay["Gốc cố định/Tháng"] * df_vay["Tháng đã trả"])
+        df_vay["Lãi tháng này"] = df_vay["Dư nợ HIỆN TẠI"] * (df_vay["interest_rate"] / 100 / 12)
+        df_vay["Tổng phải trả (Tháng này)"] = df_vay["Gốc cố định/Tháng"] + df_vay["Lãi tháng này"]
+        
+        # Đổi tên và lọc cột hiển thị
+        df_vay = df_vay.rename(columns={"purpose": "Mục đích", "bank": "Ngân hàng", "interest_rate": "Lãi suất (%/năm)", "total_months": "Tổng kỳ hạn"})
+        cols_to_show = ['Mục đích', 'Ngân hàng', 'Dư nợ HIỆN TẠI', 'Tháng đã trả', 'Tổng kỳ hạn', 'Lãi suất (%/năm)', 'Gốc cố định/Tháng', 'Lãi tháng này', 'Tổng phải trả (Tháng này)']
         
         st.dataframe(
-            df_vay[['Mục đích', 'Ngân hàng', 'Dư nợ hiện tại (VND)', 'Tháng còn lại', 'Lãi suất (%/năm)', 'Gốc tháng (VND)', 'Lãi tháng (VND)', 'Tổng phải trả (Tháng)']].style.format({
-                "Dư nợ hiện tại (VND)": "{:,.0f} ₫",
-                "Gốc tháng (VND)": "{:,.0f} ₫",
-                "Lãi tháng (VND)": "{:,.0f} ₫",
-                "Tổng phải trả (Tháng)": "{:,.0f} ₫",
+            df_vay[cols_to_show].style.format({
+                "Dư nợ HIỆN TẠI": "{:,.0f} ₫",
+                "Gốc cố định/Tháng": "{:,.0f} ₫",
+                "Lãi tháng này": "{:,.0f} ₫",
+                "Tổng phải trả (Tháng này)": "{:,.0f} ₫",
                 "Lãi suất (%/năm)": "{:.2f}%"
             }),
             use_container_width=True, hide_index=True
