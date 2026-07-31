@@ -58,7 +58,7 @@ def color_profit_loss(val):
 
 DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "TCB vợ"]
 CREDIT_CARDS = ["UOB vợ", "UOB chồng", "HSBC chồng"]
-BROKER_ACCOUNTS = ["TCBS", "SSI", "VPS", "VNDirect", "HSC"]
+BROKER_ACCOUNTS = ["TCBS", "SSI", "VPS", "VNDirect", "HSC", "Mirae Asset"]
 
 BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS + BROKER_ACCOUNTS
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
@@ -135,8 +135,6 @@ def modal_opening_balance():
             old_data = {}
             
         balances = {}
-        
-        # Tái cấu trúc Modal dạng Tabs kết hợp Grid (st.columns(2)) và step=None
         tab_debit, tab_broker, tab_credit = st.tabs(["💳 Tài khoản thanh toán", "📈 Tài khoản CK", "💳 Thẻ tín dụng"])
         
         with tab_debit:
@@ -185,176 +183,6 @@ def modal_opening_balance():
             except Exception as e:
                 st.error(f"Lỗi: {e}. Đảm bảo bạn đã tạo bảng 'opening_balances' trên Supabase.")
 
-@st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
-def modal_realestate():
-    try:
-        res = supabase.table("realestate").select("project_name, contract_value").execute()
-        existing_projects = {}
-        if res.data:
-            for row in res.data:
-                existing_projects[row['project_name']] = row.get('contract_value', 0)
-    except:
-        existing_projects = {}
-        
-    project_opts = list(existing_projects.keys()) + ["➕ Thêm dự án mới..."]
-    choice = st.selectbox("Chọn Dự án / Căn hộ", project_opts)
-    
-    if choice == "➕ Thêm dự án mới...":
-        bds_name = st.text_input("Nhập tên dự án mới (VD: TT Avio B.30.05)")
-        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0.0, step=None)
-    else:
-        bds_name = choice
-        gia_tri_hd = existing_projects[choice]
-        st.info(f"💡 Giá trị hợp đồng của dự án này: **{gia_tri_hd:,.0f} ₫**")
-        
-    st.markdown("---")
-    dot_tt = st.text_input("Tên đợt thanh toán (VD: Đợt 4 - Cất nóc)")
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0.0, step=None)
-    with c2:
-        nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES)
-        
-    c3, c4 = st.columns(2)
-    with c3:
-        ngay_tt = st.date_input("Hạn thanh toán")
-    with c4:
-        trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
-        
-    ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
-    
-    if st.button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
-        if not bds_name.strip() or not dot_tt.strip():
-            st.error("Vui lòng nhập tên dự án và tên đợt thanh toán!")
-        else:
-            try:
-                data = {
-                    "project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt,
-                    "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt),
-                    "status": trang_thai, "note": ghi_chu
-                }
-                supabase.table("realestate").insert(data).execute()
-                st.success("Đã ghi nhận tiến độ BĐS mới!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
-
-@st.dialog("SỬA TIẾN ĐỘ BĐS")
-def modal_edit_realestate(row_data):
-    with st.form("edit_realestate_form", clear_on_submit=True):
-        bds_name = st.text_input("Tên dự án / Căn hộ", value=row_data['project_name'])
-        cv_val = float(row_data['contract_value']) if 'contract_value' in row_data and pd.notna(row_data['contract_value']) else 0.0
-        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0.0, step=None, value=cv_val)
-        st.markdown("---")
-        dot_tt = st.text_input("Tên đợt", value=row_data['installment_name'])
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0.0, step=None, value=float(row_data['amount']))
-        with c2:
-            fs_val = row_data['funding_source'] if 'funding_source' in row_data else "Tiền mặt"
-            idx_fs = FUNDING_SOURCES.index(fs_val) if fs_val in FUNDING_SOURCES else 0
-            nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES, index=idx_fs)
-            
-        c3, c4 = st.columns(2)
-        with c3:
-            try:
-                due_dt = pd.to_datetime(row_data['due_date']).date()
-            except:
-                due_dt = date.today()
-            ngay_tt = st.date_input("Hạn thanh toán", value=due_dt)
-        with c4:
-            status_opts = ["Chưa thanh toán", "Đã thanh toán"]
-            idx_status = status_opts.index(row_data['status']) if row_data['status'] in status_opts else 0
-            trang_thai = st.selectbox("Trạng thái", status_opts, index=idx_status)
-            
-        note_val = row_data['note'] if 'note' in row_data and pd.notna(row_data['note']) else ""
-        ghi_chu = st.text_input("Ghi chú", value=note_val)
-        
-        if st.form_submit_button("CẬP NHẬT BĐS", use_container_width=True):
-            try:
-                data = {
-                    "project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt,
-                    "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt),
-                    "status": trang_thai, "note": ghi_chu
-                }
-                supabase.table("realestate").update(data).eq("id", row_data['id']).execute()
-                st.success("Đã cập nhật BĐS!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
-
-@st.dialog("THÊM KHOẢN VAY")
-def modal_debt():
-    with st.form("debt_form", clear_on_submit=True):
-        muc_dich = st.text_input("Mục đích vay (VD: Chung cư Q7 Riverside)")
-        ngan_hang = st.selectbox("Ngân hàng cho vay", BANK_ACCOUNTS + ["Khác"])
-        
-        st.markdown("**Thông số khởi tạo gốc (Chỉ nhập 1 lần)**")
-        c1, c2 = st.columns(2)
-        with c1:
-            tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0.0, step=None, value=1800000000.0)
-        with c2:
-            tong_thoi_gian = st.number_input("Tổng thời gian (Tháng)", min_value=1.0, step=None, value=180.0)
-            
-        c3, c4 = st.columns(2)
-        with c3:
-            ngay_giai_ngan = st.date_input("Ngày giải ngân")
-        with c4:
-            lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=None, format="%.2f", value=7.3)
-            
-        st.info("💡 Hệ thống tự động trừ lùi dư nợ. Chỉ sửa khi Lãi suất thay đổi hoặc Trả nợ trước hạn.")
-        
-        if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
-            try:
-                data = {
-                    "purpose": muc_dich, "bank": ngan_hang, "original_principal": int(tien_vay_ban_dau),
-                    "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
-                }
-                supabase.table("debts").insert(data).execute()
-                st.success("Đã ghi nhận khoản vay!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
-
-@st.dialog("SỬA KHOẢN VAY")
-def modal_edit_debt(row_data):
-    with st.form("edit_debt_form", clear_on_submit=True):
-        muc_dich = st.text_input("Mục đích vay", value=row_data['purpose'])
-        bank_opts = BANK_ACCOUNTS + ["Khác"]
-        idx_bank = bank_opts.index(row_data['bank']) if row_data['bank'] in bank_opts else 0
-        ngan_hang = st.selectbox("Ngân hàng cho vay", bank_opts, index=idx_bank)
-        
-        st.markdown("**Thông số gốc**")
-        c1, c2 = st.columns(2)
-        with c1:
-            tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0.0, step=None, value=float(row_data['original_principal']))
-        with c2:
-            tong_thoi_gian = st.number_input("Tổng thời gian (Tháng)", min_value=1.0, step=None, value=float(row_data['total_months']))
-            
-        c3, c4 = st.columns(2)
-        with c3:
-            try:
-                start_dt = pd.to_datetime(row_data['start_date']).date()
-            except:
-                start_dt = date.today()
-            ngay_giai_ngan = st.date_input("Ngày giải ngân", value=start_dt)
-        with c4:
-            lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=None, format="%.3f", value=float(row_data['interest_rate']))
-            
-        if st.form_submit_button("CẬP NHẬT KHOẢN VAY", use_container_width=True):
-            try:
-                data = {
-                    "purpose": muc_dich, "bank": ngan_hang, "original_principal": int(tien_vay_ban_dau),
-                    "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
-                }
-                supabase.table("debts").update(data).eq("id", row_data['id']).execute()
-                st.success("Đã cập nhật!")
-                st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
-
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
     with st.form("invest_stock_form", clear_on_submit=True):
@@ -377,7 +205,20 @@ def modal_stock():
             if ticker.strip() == "":
                 st.error("Vui lòng nhập mã cổ phiếu!")
             else:
-                st.success(f"Đã lưu lệnh {action} {int(volume)} CP {ticker} qua {broker}!")
+                try:
+                    data = {
+                        "broker": broker,
+                        "fund_owner": fund_owner_stock,
+                        "ticker": ticker.strip(),
+                        "action": action,
+                        "volume": int(volume),
+                        "price": float(price)
+                    }
+                    supabase.table("stocks").insert(data).execute()
+                    st.success(f"Đã lưu lệnh {action} {int(volume)} CP {ticker} thành công!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Lỗi khi lưu lệnh: {e}. Đảm bảo bạn đã tạo bảng 'stocks' trên Supabase.")
 
 @st.dialog("GIAO DỊCH CHỨNG CHỈ QUỸ")
 def modal_ccq():
@@ -504,7 +345,24 @@ with tab_home:
     except:
         no_khoan_vay = 0
 
-    tong_ccq, tong_cp = 0, 0 
+    tong_ccq = 0
+    try:
+        res_stk = supabase.table("stocks").select("*").execute()
+        if res_stk.data:
+            df_stk = pd.DataFrame(res_stk.data)
+            tong_cp = 0
+            for ticker, grp in df_stk.groupby('ticker'):
+                buy_vol = grp[grp['action'] == 'Mua']['volume'].sum()
+                sell_vol = grp[grp['action'] == 'Bán']['volume'].sum()
+                net_vol = buy_vol - sell_vol
+                buy_val = (grp[grp['action'] == 'Mua']['volume'] * grp[grp['action'] == 'Mua']['price']).sum()
+                avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+                tong_cp += net_vol * avg_price
+        else:
+            tong_cp = 0
+    except:
+        tong_cp = 0
+
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tai_san_rong = tong_tai_san - no_khoan_vay
     
@@ -581,7 +439,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (VỚI PLOTLY DARK MODE TEMPLATE) ---
+# --- TAB 1: DÒNG TIỀN ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -612,23 +470,29 @@ with tab_cashflow:
     st.markdown("#### 🔍 Bộ lọc & Tùy chọn hiển thị")
     fc1, fc2, fc3 = st.columns(3)
     with fc1:
-        date_range = st.date_input("Khoảng thời gian", value=(default_start, max_d))
+        date_input_val = st.date_input("Khoảng thời gian", value=(default_start, max_d))
     with fc2:
         selected_accounts = st.multiselect("Tài khoản nguồn", BANK_ACCOUNTS, default=BANK_ACCOUNTS)
     with fc3:
         available_cats = df_all['category'].unique().tolist() if not df_all.empty else CATS
         selected_cats = st.multiselect("Phân loại danh mục", available_cats, default=available_cats)
         
+    if isinstance(date_input_val, tuple):
+        if len(date_input_val) == 2:
+            start_date, end_date = date_input_val
+        elif len(date_input_val) == 1:
+            start_date = date_input_val[0]
+            end_date = start_date
+        else:
+            start_date, end_date = default_start, max_d
+    else:
+        start_date = date_input_val
+        end_date = date_input_val
+
     if not df_all.empty:
         df_filtered = df_all.copy()
         df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
-        
-        if isinstance(date_range, tuple) and len(date_range) == 2:
-            start_date, end_date = date_range
-            df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
-        elif isinstance(date_range, tuple) and len(date_range) == 1:
-            start_date = date_range[0]
-            df_filtered = df_filtered[df_filtered['date_only'] >= start_date]
+        df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
             
         if selected_accounts:
             df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
@@ -637,8 +501,6 @@ with tab_cashflow:
     else:
         df_filtered = pd.DataFrame()
 
-    filter_start_date = date_range[0] if isinstance(date_range, tuple) and len(date_range) > 0 else default_start
-
     try:
         res_ob = supabase.table("opening_balances").select("*").execute()
         base_opening = {row['account']: row['balance'] for row in res_ob.data} if res_ob.data else {}
@@ -646,7 +508,7 @@ with tab_cashflow:
         base_opening = {}
 
     try:
-        res_prior = supabase.table("cashflow").select("*").lt("created_at", str(filter_start_date)).execute()
+        res_prior = supabase.table("cashflow").select("*").lt("created_at", str(start_date)).execute()
         df_prior = pd.DataFrame(res_prior.data) if res_prior.data else pd.DataFrame()
     except:
         df_prior = pd.DataFrame()
@@ -702,7 +564,6 @@ with tab_cashflow:
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
-    # TRỰC QUAN HÓA DÒNG TIỀN VỚI PLOTLY DARK MODE TEMPLATE
     if not df_filtered.empty:
         viz1, viz2 = st.columns(2)
         with viz1:
@@ -791,7 +652,55 @@ with tab_invest:
         with col_btn2:
             if st.button("+ LỆNH CỔ PHIẾU MỚI", use_container_width=True):
                 modal_stock()
-        st.info("Danh mục Cổ phiếu hiện đang trống.")
+                
+        st.markdown("<br/>", unsafe_allow_html=True)
+        st.markdown("**DANH MỤC CỔ PHIẾU ĐANG NẮM GIỮ**")
+        
+        try:
+            res_stk = supabase.table("stocks").select("*").execute()
+            df_stk = pd.DataFrame(res_stk.data) if res_stk.data else pd.DataFrame()
+        except:
+            df_stk = pd.DataFrame()
+            
+        if not df_stk.empty and 'ticker' in df_stk.columns:
+            summary_list = []
+            for ticker, grp in df_stk.groupby('ticker'):
+                buy_rows = grp[grp['action'] == 'Mua']
+                sell_rows = grp[grp['action'] == 'Bán']
+                
+                buy_vol = buy_rows['volume'].sum()
+                sell_vol = sell_rows['volume'].sum()
+                net_vol = buy_vol - sell_vol
+                
+                buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
+                avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+                total_cost = net_vol * avg_price
+                broker_name = grp['broker'].iloc[0] if 'broker' in grp.columns else 'N/A'
+                
+                if net_vol > 0:
+                    summary_list.append({
+                        "Mã CK": ticker,
+                        "Công ty CK": broker_name,
+                        "Khối lượng": net_vol,
+                        "Giá vốn TB (VND)": avg_price,
+                        "Tổng giá vốn (VND)": total_cost
+                    })
+                    
+            if summary_list:
+                df_portfolio = pd.DataFrame(summary_list)
+                st.dataframe(
+                    df_portfolio,
+                    column_config={
+                        "Khối lượng": st.column_config.NumberColumn("Khối lượng", format="%,.0f"),
+                        "Giá vốn TB (VND)": st.column_config.NumberColumn("Giá vốn TB (VND)", format="%,.0f ₫"),
+                        "Tổng giá vốn (VND)": st.column_config.NumberColumn("Tổng giá vốn (VND)", format="%,.0f ₫")
+                    },
+                    use_container_width=True, hide_index=True
+                )
+            else:
+                st.info("Hiện không có cổ phiếu nào trong danh mục (Khối lượng tồn = 0).")
+        else:
+            st.info("Chưa có lịch sử giao dịch cổ phiếu nào. Vui lòng bấm '+ Lệnh cổ phiếu mới' để bắt đầu.")
 
     with subtab_ccq:
         col_btn_ccq, _ = st.columns([1, 3])
