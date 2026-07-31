@@ -56,7 +56,10 @@ def color_profit_loss(val):
     color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#94a3b8'
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
-BANK_ACCOUNTS = ["VCB chồng", "TCB chồng", "HSBC chồng", "UOB chồng", "UOB vợ", "TCB vợ"]
+DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "UOB vợ", "TCB vợ"]
+CREDIT_CARDS = ["HSBC chồng", "UOB chồng"]
+BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS
+
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
 CATS = ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"]
@@ -108,12 +111,11 @@ def modal_edit_cashflow(row_data):
             except Exception as e:
                 st.error(f"Lỗi: {e}")
 
-@st.dialog("CẬP NHẬT SỐ DƯ ĐẦU KỲ (THÁNG 8)")
+@st.dialog("CẤU HÌNH SỐ DƯ GỐC BAN ĐẦU")
 def modal_opening_balance():
     with st.form("opening_balance_form"):
-        st.markdown("Nhập số dư ban đầu cho các tài khoản tính đến trước ngày bắt đầu theo dõi:")
+        st.markdown("Nhập số dư gốc ban đầu của các tài khoản tại mốc xuất phát hệ thống:")
         
-        # Lấy dữ liệu cũ nếu có
         try:
             res = supabase.table("opening_balances").select("*").execute()
             old_data = {row['account']: row['balance'] for row in res.data} if res.data else {}
@@ -121,19 +123,24 @@ def modal_opening_balance():
             old_data = {}
             
         balances = {}
-        for acc in BANK_ACCOUNTS:
+        st.markdown("##### 💳 Tài khoản thanh toán (Số dư dương)")
+        for acc in DEBIT_ACCOUNTS:
             val = float(old_data.get(acc, 0.0))
-            balances[acc] = st.number_input(f"Số dư đầu kỳ: {acc} (VND)", min_value=0.0, step=None, value=val)
+            balances[acc] = st.number_input(f"{acc} (VND)", min_value=0.0, step=None, value=val)
             
-        if st.form_submit_button("LƯU SỐ DƯ ĐẦU KỲ", use_container_width=True):
+        st.markdown("##### 💳 Thẻ tín dụng HSBC / UOB (Dư nợ gốc)")
+        for acc in CREDIT_CARDS:
+            val = float(old_data.get(acc, 0.0))
+            balances[acc] = st.number_input(f"Dư nợ {acc} (VND)", min_value=0.0, step=None, value=val)
+            
+        if st.form_submit_button("LƯU SỐ DƯ GỐC", use_container_width=True):
             try:
                 for acc, bal in balances.items():
-                    # Upsert vào bảng opening_balances
                     supabase.table("opening_balances").upsert({"account": acc, "balance": bal}, on_conflict="account").execute()
-                st.success("Đã cập nhật số dư đầu kỳ thành công!")
+                st.success("Đã lưu số dư gốc thành công!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Lỗi: {e}. Vui lòng đảm bảo bạn đã tạo bảng 'opening_balances' trên Supabase.")
+                st.error(f"Lỗi: {e}. Đảm bảo bạn đã tạo bảng 'opening_balances' trên Supabase.")
 
 @st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
 def modal_realestate():
@@ -531,7 +538,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (FIX LỖI UI & BỔ SUNG SỐ DƯ ĐẦU KỲ TỪ THÁNG 8) ---
+# --- TAB 1: DÒNG TIỀN ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -543,14 +550,12 @@ with tab_cashflow:
             
     st.markdown("<br/>", unsafe_allow_html=True)
     
-    # 1. ADVANCED FILTER BAR (ĐÃ GỠ BỎ st.expander ĐỂ TRIỆT TIÊU LỖI _arrow_)
     try:
         res_all_cf = supabase.table("cashflow").select("*").execute()
         df_all = pd.DataFrame(res_all_cf.data) if res_all_cf.data else pd.DataFrame()
     except:
         df_all = pd.DataFrame()
         
-    # Mặc định khoảng thời gian bắt đầu từ 01/08/2026 đến hôm nay
     default_start = date(2026, 8, 1)
     default_end = date.today()
     
@@ -571,7 +576,6 @@ with tab_cashflow:
         available_cats = df_all['category'].unique().tolist() if not df_all.empty else CATS
         selected_cats = st.multiselect("Phân loại danh mục", available_cats, default=available_cats)
         
-    # Xử lý lọc dữ liệu giao dịch
     if not df_all.empty:
         df_filtered = df_all.copy()
         df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
@@ -590,15 +594,37 @@ with tab_cashflow:
     else:
         df_filtered = pd.DataFrame()
 
-    # 2. LẤY SỐ DƯ ĐẦU KỲ VÀ TÍNH KPIS
+    # TỰ ĐỘNG TÍNH TOÁN SỐ DƯ ĐẦU KỲ CUỐN CHIẾU THEO THỜI GIAN BỘ LỌC
+    filter_start_date = date_range[0] if isinstance(date_range, tuple) and len(date_range) > 0 else default_start
+
     try:
         res_ob = supabase.table("opening_balances").select("*").execute()
-        opening_data = {row['account']: row['balance'] for row in res_ob.data} if res_ob.data else {}
+        base_opening = {row['account']: row['balance'] for row in res_ob.data} if res_ob.data else {}
     except:
-        opening_data = {}
-        
-    # Tổng số dư đầu kỳ của các tài khoản được chọn trong bộ lọc
-    total_opening = sum([val for acc, val in opening_data.items() if acc in selected_accounts])
+        base_opening = {}
+
+    try:
+        res_prior = supabase.table("cashflow").select("*").lt("created_at", str(filter_start_date)).execute()
+        df_prior = pd.DataFrame(res_prior.data) if res_prior.data else pd.DataFrame()
+    except:
+        df_prior = pd.DataFrame()
+
+    total_debit_opening = 0
+    total_credit_opening = 0
+
+    for acc in selected_accounts:
+        base_val = base_opening.get(acc, 0.0)
+        if not df_prior.empty and 'account' in df_prior.columns:
+            acc_prior = df_prior[df_prior['account'] == acc]
+            if not acc_prior.empty:
+                thu_prior = acc_prior[acc_prior['category'] == 'Lương/Thu nhập']['amount'].sum()
+                chi_prior = acc_prior[acc_prior['category'] != 'Lương/Thu nhập']['amount'].sum()
+                base_val = base_val + thu_prior - chi_prior
+                
+        if acc in DEBIT_ACCOUNTS:
+            total_debit_opening += base_val
+        elif acc in CREDIT_CARDS:
+            total_credit_opening += base_val
 
     if not df_filtered.empty:
         total_thu = df_filtered[df_filtered['category'] == 'Lương/Thu nhập']['amount'].sum()
@@ -607,30 +633,31 @@ with tab_cashflow:
     else:
         total_thu, total_chi, dong_tien_thuan = 0, 0, 0
 
-    tong_quy = total_opening + dong_tien_thuan
+    tong_quy = (total_debit_opening + dong_tien_thuan) - total_credit_opening
 
     kc1, kc2, kc3, kc4 = st.columns(4)
     with kc1:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">🏦 SỐ DƯ ĐẦU KỲ</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: #38bdf8;'>{total_opening:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">🏦 TK THANH TOÁN (ĐẦU KỲ)</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.4rem; font-weight: 700; color: #38bdf8;'>{total_debit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc2:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">📈 TỔNG THU (THÁNG 8+)</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">💳 DƯ NỢ THẺ TÍN DỤNG</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.4rem; font-weight: 700; color: #ef4444;'>-{total_credit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc3:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">📉 TỔNG CHI (THÁNG 8+)</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">📈 THU / 📉 CHI (KỲ NÀY)</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.2rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.2rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc4:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">⚖️ TỔNG QUỸ HIỆN TẠI</div>', unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">⚖️ TỔNG QUỸ RÒNG</div>', unsafe_allow_html=True)
             color_dt = "#10b981" if tong_quy >= 0 else "#ef4444"
             st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: {color_dt};'>{tong_quy:,.0f} ₫</div>", unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
-    # 3. TRỰC QUAN HÓA DÒNG TIỀN (2 BIỂU ĐỒ SIDE-BY-SIDE)
+    # TRỰC QUAN HÓA DÒNG TIỀN
     if not df_filtered.empty:
         viz1, viz2 = st.columns(2)
         with viz1:
@@ -671,7 +698,7 @@ with tab_cashflow:
                 st.info("Chưa có dữ liệu chi tiêu trong khoảng thời gian này.")
     st.divider()
 
-    # 4. BẢNG LỊCH SỬ GIAO DỊCH ĐÃ LỌC
+    # BẢNG GIAO DỊCH
     st.markdown("**LỊCH SỬ GIAO DỊCH (ĐÃ LỌC)**")
     if not df_filtered.empty:
         df_display = df_filtered[['id', 'created_at_dt', 'account', 'category', 'amount', 'note']].copy()
