@@ -1,11 +1,18 @@
 import streamlit as st
 import pandas as pd
 from datetime import date
+from supabase import create_client, Client
 
-# 1. THIẾT LẬP CẤU HÌNH CƠ BẢN
+# 1. THIẾT LẬP CẤU HÌNH & KẾT NỐI SUPABASE
 st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", layout="wide")
 
-# 2. HALLMARK CUSTOM CSS INJECTION
+@st.cache_resource
+def init_supabase():
+    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+
+supabase: Client = init_supabase()
+
+# 2. HALLMARK CUSTOM CSS INJECTION (Anti-AI-Slop Design)
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
@@ -56,7 +63,7 @@ def color_profit_loss(val):
     color = '#10b981' if val > 0 else '#ef4444' if val < 0 else '#94a3b8'
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
-# 3. KHO MODAL (@st.dialog) CHO PHÉP NHẬP LIỆU ĐỘNG
+# 3. KHO MODAL (@st.dialog) - GHI DỮ LIỆU THẬT VÀO SUPABASE
 @st.dialog("GHI NHẬN DÒNG TIỀN")
 def modal_cashflow():
     with st.form("cashflow_form", clear_on_submit=True):
@@ -64,8 +71,15 @@ def modal_cashflow():
         category = st.selectbox("Phân loại", ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Trả nợ/Tiến độ", "Lương/Thu nhập", "Khác"])
         amount = st.number_input("Số tiền (VND)", min_value=0, step=50000)
         note = st.text_input("Ghi chú")
+        
         if st.form_submit_button("LƯU GIAO DỊCH", use_container_width=True):
-            st.success(f"Đã lưu {amount:,.0f} VND!")
+            try:
+                data = {"account": account, "amount": amount, "category": category, "note": note}
+                supabase.table("cashflow").insert(data).execute()
+                st.success(f"Đã lưu thành công {amount:,.0f} VND lên Database!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi khi lưu: {e}")
 
 @st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
 def modal_realestate():
@@ -122,8 +136,22 @@ def modal_savings():
         new_date = st.date_input("Ngày gửi")
         new_term = st.selectbox("Kỳ hạn", ["1 Tháng", "3 Tháng", "6 Tháng", "12 Tháng"])
         new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, format="%.1f")
+        
         if st.form_submit_button("LƯU KHOẢN GỬI", use_container_width=True):
-            st.success("Đã ghi nhận sổ tiết kiệm mới!")
+            try:
+                data = {
+                    "fund_owner": new_fund,
+                    "bank": new_bank,
+                    "deposit_date": str(new_date),
+                    "term": new_term,
+                    "interest_rate": new_rate,
+                    "amount": new_amount
+                }
+                supabase.table("savings").insert(data).execute()
+                st.success("Đã lưu sổ tiết kiệm mới vào Database!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi khi lưu: {e}")
 
 # 4. TAB ĐIỀU HƯỚNG CHÍNH
 tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
@@ -132,7 +160,14 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 
 # --- TAB 0: TỔNG QUAN ---
 with tab_home:
-    tong_tiet_kiem, tong_ccq, tong_cp, bds_da_dong = 410000000, 75000000, 60000000, 800000000    
+    try:
+        res_savings = supabase.table("savings").select("amount").execute()
+        db_tiet_kiem = sum([row["amount"] for row in res_savings.data]) if res_savings.data else 0
+    except:
+        db_tiet_kiem = 410000000
+
+    tong_tiet_kiem = db_tiet_kiem if db_tiet_kiem > 0 else 410000000
+    tong_ccq, tong_cp, bds_da_dong = 75000000, 60000000, 800000000    
     no_bds_con_lai, no_khoan_vay = 1700000000, 500000000   
     
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
@@ -196,8 +231,17 @@ with tab_cashflow:
     with col_btn:
         if st.button("+ THÊM GIAO DỊCH MỚI", use_container_width=True):
             modal_cashflow()
-    st.markdown("**LỊCH SỬ GIAO DỊCH**")
-    st.caption("Dữ liệu đang đồng bộ...")
+            
+    st.markdown("**LỊCH SỬ GIAO DỊCH (TỪ DATABASE)**")
+    try:
+        res_cf = supabase.table("cashflow").select("*").order("created_at", desc=True).limit(10).execute()
+        if res_cf.data:
+            df_cf = pd.DataFrame(res_cf.data)
+            st.dataframe(df_cf[['created_at', 'account', 'category', 'amount', 'note']], use_container_width=True, hide_index=True)
+        else:
+            st.info("Chưa có giao dịch nào được ghi nhận.")
+    except Exception as e:
+        st.error(f"Không thể tải dữ liệu dòng tiền: {e}")
 
 # --- TAB 2: ĐẦU TƯ ---
 with tab_invest:
@@ -238,34 +282,43 @@ with tab_invest:
             use_container_width=True, hide_index=True
         )
 
-# --- TAB 3: TIẾT KIỆM ---
+# --- TAB 3: TIẾT KIỆM (ĐỌC TRỰC TIẾP TỪ SUPABASE) ---
 with tab_savings:
     col_btn3, _ = st.columns([1, 3])
     with col_btn3:
         if st.button("+ TẠO SỔ TIẾT KIỆM MỚI", use_container_width=True):
             modal_savings()
-    df_savings = pd.DataFrame({
-        "Portfolio": ["Tieu Boi Funding", "Daddy Funding", "Mama Funding", "Tieu Boi Funding", "Mama Funding"],
-        "Ngân hàng": ["TCB", "TCB", "VCB", "MBBank", "TCB"],
-        "Ngày gửi": [date(2026, 1, 15), date(2026, 3, 10), date(2026, 5, 20), date(2026, 7, 10), date(2026, 6, 5)],
-        "Kỳ hạn": ["6 Tháng", "12 Tháng", "3 Tháng", "12 Tháng", "6 Tháng"],
-        "Lãi suất (%)": [5.0, 5.5, 4.0, 5.2, 4.8],
-        "Tiền gốc (VND)": [50000000, 100000000, 150000000, 30000000, 80000000]
-    })
+            
+    try:
+        res_sav = supabase.table("savings").select("*").execute()
+        df_savings = pd.DataFrame(res_sav.data) if res_sav.data else pd.DataFrame(columns=["fund_owner", "bank", "deposit_date", "term", "interest_rate", "amount"])
+    except:
+        df_savings = pd.DataFrame()
+
     funds_info = [("Tieu Boi Funding", "Tieu Boi Funding"), ("Daddy Funding", "Daddy Funding"), ("Mama Funding", "Mama Funding")]
     for display_title, fund_name in funds_info:
         st.subheader(display_title)
-        fund_data = df_savings[df_savings["Portfolio"] == fund_name].copy()
-        total_goc = fund_data["Tiền gốc (VND)"].sum()
+        if not df_savings.empty and "fund_owner" in df_savings.columns:
+            fund_data = df_savings[df_savings["fund_owner"] == fund_name].copy()
+            total_goc = fund_data["amount"].sum() if not fund_data.empty else 0
+        else:
+            fund_data = pd.DataFrame()
+            total_goc = 0
+            
         st.markdown(f"**Tổng vốn:** <span style='color:#10b981; font-size:18px'>{total_goc:,.0f} VND</span>", unsafe_allow_html=True)
+        
         if not fund_data.empty:
             st.dataframe(
-                fund_data[['Ngân hàng', 'Ngày gửi', 'Kỳ hạn', 'Lãi suất (%)', 'Tiền gốc (VND)']].style.format({"Lãi suất (%)": "{:.1f}", "Tiền gốc (VND)": "{:,.0f}"}),
+                fund_data[['bank', 'deposit_date', 'term', 'interest_rate', 'amount']].rename(
+                    columns={'bank': 'Ngân hàng', 'deposit_date': 'Ngày gửi', 'term': 'Kỳ hạn', 'interest_rate': 'Lãi suất (%)', 'amount': 'Tiền gốc (VND)'}
+                ).style.format({"Lãi suất (%)": "{:.1f}", "Tiền gốc (VND)": "{:,.0f}"}),
                 use_container_width=True, hide_index=True
             )
+        else:
+            st.caption("Chưa có sổ tiết kiệm nào trong quỹ này.")
         st.divider()
 
-# --- TAB 4: BĐS & TÍN DỤNG (ĐÃ THÊM CÁC NÚT THAO TÁC ĐỘNG) ---
+# --- TAB 4: BĐS & TÍN DỤNG ---
 with tab_realestate:
     col_re_btn, col_debt_btn, _ = st.columns([1.2, 1.2, 2])
     with col_re_btn:
