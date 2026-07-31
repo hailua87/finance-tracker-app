@@ -119,6 +119,7 @@ def modal_realestate():
         
         ngay_tt = st.date_input("Hạn thanh toán")
         trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
+        ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
         
         if st.form_submit_button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
             try:
@@ -129,13 +130,14 @@ def modal_realestate():
                     "amount": so_tien_tt,
                     "funding_source": nguon_tien,
                     "due_date": str(ngay_tt),
-                    "status": trang_thai
+                    "status": trang_thai,
+                    "note": ghi_chu
                 }
                 supabase.table("realestate").insert(data).execute()
                 st.success("Đã ghi nhận tiến độ BĐS mới!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Lỗi: {e}. Vui lòng tạo cột 'contract_value' và 'funding_source' trên Supabase.")
+                st.error(f"Lỗi: {e}. Vui lòng tạo cột 'contract_value', 'funding_source', 'note' trên Supabase.")
 
 @st.dialog("SỬA TIẾN ĐỘ BĐS")
 def modal_edit_realestate(row_data):
@@ -164,6 +166,9 @@ def modal_edit_realestate(row_data):
         idx_status = status_opts.index(row_data['status']) if row_data['status'] in status_opts else 0
         trang_thai = st.selectbox("Trạng thái", status_opts, index=idx_status)
         
+        note_val = row_data['note'] if 'note' in row_data and pd.notna(row_data['note']) else ""
+        ghi_chu = st.text_input("Ghi chú", value=note_val)
+        
         if st.form_submit_button("CẬP NHẬT BĐS", use_container_width=True):
             try:
                 data = {
@@ -173,7 +178,8 @@ def modal_edit_realestate(row_data):
                     "amount": so_tien_tt,
                     "funding_source": nguon_tien,
                     "due_date": str(ngay_tt),
-                    "status": trang_thai
+                    "status": trang_thai,
+                    "note": ghi_chu
                 }
                 supabase.table("realestate").update(data).eq("id", row_data['id']).execute()
                 st.success("Đã cập nhật BĐS!")
@@ -508,13 +514,14 @@ with tab_realestate:
         df_re = pd.DataFrame()
 
     if not df_re.empty and "project_name" in df_re.columns:
-        # Fallback an toàn nếu chưa tạo 2 cột mới trên Database
         if "contract_value" not in df_re.columns:
             df_re["contract_value"] = 0
         if "funding_source" not in df_re.columns:
             df_re["funding_source"] = "N/A"
+        if "note" not in df_re.columns:
+            df_re["note"] = ""
             
-        df_re_display = df_re[['id', 'project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status']].rename(
+        df_re_display = df_re[['id', 'project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note']].rename(
             columns={
                 'project_name': 'Dự án', 
                 'contract_value': 'Giá trị HĐ (VND)',
@@ -522,7 +529,8 @@ with tab_realestate:
                 'amount': 'Thanh toán (VND)', 
                 'funding_source': 'Nguồn tiền',
                 'due_date': 'Hạn thanh toán', 
-                'status': 'Trạng thái'
+                'status': 'Trạng thái',
+                'note': 'Ghi chú'
             }
         )
         st.dataframe(
@@ -616,5 +624,6 @@ with tab_realestate:
                 supabase.table("debts").delete().eq("id", action_id_debt).execute()
                 st.success("Đã xóa khoản vay!")
                 st.rerun()
+
     else:
         st.info("Dữ liệu dư nợ hiện đang trống. Vui lòng thêm khoản vay mới.")
