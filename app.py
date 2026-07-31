@@ -60,9 +60,7 @@ DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "TCB vợ"]
 CREDIT_CARDS = ["UOB vợ", "UOB chồng", "HSBC chồng"]
 BROKER_ACCOUNTS = ["TCBS", "SSI", "VPS", "VNDirect", "HSC"]
 
-# Tổng hợp tất cả nguồn tài khoản dòng tiền
 BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS + BROKER_ACCOUNTS
-
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
 
@@ -137,21 +135,47 @@ def modal_opening_balance():
             old_data = {}
             
         balances = {}
-        st.markdown("##### 💳 Tài khoản thanh toán (Số dư dương)")
-        for acc in DEBIT_ACCOUNTS:
-            val = float(old_data.get(acc, 0.0))
-            balances[acc] = st.number_input(f"{acc} (VND)", min_value=0.0, step=None, value=val)
+        
+        # Tái cấu trúc Modal dạng Tabs kết hợp Grid (st.columns(2)) và step=None
+        tab_debit, tab_broker, tab_credit = st.tabs(["💳 Tài khoản thanh toán", "📈 Tài khoản CK", "💳 Thẻ tín dụng"])
+        
+        with tab_debit:
+            st.markdown("##### Tài khoản thanh toán (Số dư dương)")
+            for i in range(0, len(DEBIT_ACCOUNTS), 2):
+                c1, c2 = st.columns(2)
+                with c1:
+                    acc1 = DEBIT_ACCOUNTS[i]
+                    balances[acc1] = st.number_input(f"{acc1} (VND)", min_value=0.0, step=None, value=float(old_data.get(acc1, 0.0)), key=f"ob_{acc1}")
+                with c2:
+                    if i + 1 < len(DEBIT_ACCOUNTS):
+                        acc2 = DEBIT_ACCOUNTS[i+1]
+                        balances[acc2] = st.number_input(f"{acc2} (VND)", min_value=0.0, step=None, value=float(old_data.get(acc2, 0.0)), key=f"ob_{acc2}")
+                        
+        with tab_broker:
+            st.markdown("##### Tài khoản Chứng khoán (Tiền mặt / Margin)")
+            for i in range(0, len(BROKER_ACCOUNTS), 2):
+                c1, c2 = st.columns(2)
+                with c1:
+                    acc1 = BROKER_ACCOUNTS[i]
+                    balances[acc1] = st.number_input(f"{acc1} (VND)", step=None, value=float(old_data.get(acc1, 0.0)), key=f"ob_{acc1}")
+                with c2:
+                    if i + 1 < len(BROKER_ACCOUNTS):
+                        acc2 = BROKER_ACCOUNTS[i+1]
+                        balances[acc2] = st.number_input(f"{acc2} (VND)", step=None, value=float(old_data.get(acc2, 0.0)), key=f"ob_{acc2}")
+                        
+        with tab_credit:
+            st.markdown("##### Thẻ tín dụng (Dư nợ gốc cần trả)")
+            for i in range(0, len(CREDIT_CARDS), 2):
+                c1, c2 = st.columns(2)
+                with c1:
+                    acc1 = CREDIT_CARDS[i]
+                    balances[acc1] = st.number_input(f"Dư nợ {acc1} (VND)", min_value=0.0, step=None, value=float(old_data.get(acc1, 0.0)), key=f"ob_{acc1}")
+                with c2:
+                    if i + 1 < len(CREDIT_CARDS):
+                        acc2 = CREDIT_CARDS[i+1]
+                        balances[acc2] = st.number_input(f"Dư nợ {acc2} (VND)", min_value=0.0, step=None, value=float(old_data.get(acc2, 0.0)), key=f"ob_{acc2}")
             
-        st.markdown("##### 📈 Tài khoản Chứng khoán (Tiền mặt / Margin)")
-        for acc in BROKER_ACCOUNTS:
-            val = float(old_data.get(acc, 0.0))
-            balances[acc] = st.number_input(f"Tiền mặt {acc} (VND) [Nếu Margin âm, nhập số âm]", step=None, value=val)
-            
-        st.markdown("##### 💳 Thẻ tín dụng (UOB, HSBC) (Dư nợ gốc)")
-        for acc in CREDIT_CARDS:
-            val = float(old_data.get(acc, 0.0))
-            balances[acc] = st.number_input(f"Dư nợ {acc} (VND)", min_value=0.0, step=None, value=val)
-            
+        st.markdown("<br/>", unsafe_allow_html=True)
         if st.form_submit_button("LƯU SỐ DƯ GỐC", use_container_width=True):
             try:
                 for acc, bal in balances.items():
@@ -557,7 +581,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (TÍCH HỢP TÀI KHOẢN CHỨNG KHOÁN) ---
+# --- TAB 1: DÒNG TIỀN (VỚI PLOTLY DARK MODE TEMPLATE) ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -678,6 +702,7 @@ with tab_cashflow:
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
+    # TRỰC QUAN HÓA DÒNG TIỀN VỚI PLOTLY DARK MODE TEMPLATE
     if not df_filtered.empty:
         viz1, viz2 = st.columns(2)
         with viz1:
@@ -689,11 +714,12 @@ with tab_cashflow:
             fig_trend = px.bar(
                 df_trend, x='Ngay', y='amount', color='Loại giao dịch',
                 barmode='group',
-                color_discrete_map={'Thu nhập': '#10b981', 'Chi tiêu': '#ef4444'}
+                color_discrete_map={'Thu nhập': '#10b981', 'Chi tiêu': '#ef4444'},
+                template="plotly_dark"
             )
             fig_trend.update_layout(
                 paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font_color="#f8fafc", margin=dict(t=20, b=20, l=20, r=20),
+                margin=dict(t=20, b=20, l=20, r=20),
                 legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
             )
             st.plotly_chart(fig_trend, use_container_width=True)
@@ -705,11 +731,12 @@ with tab_cashflow:
                 df_cat = df_chi.groupby('category')['amount'].sum().reset_index()
                 fig_donut = px.pie(
                     df_cat, names='category', values='amount', hole=0.5,
-                    color_discrete_sequence=['#38bdf8', '#f59e0b', '#8b5cf6', '#ec4899', '#10b981']
+                    color_discrete_sequence=['#38bdf8', '#f59e0b', '#8b5cf6', '#ec4899', '#10b981'],
+                    template="plotly_dark"
                 )
                 fig_donut.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                    font_color="#f8fafc", margin=dict(t=20, b=20, l=20, r=20),
+                    margin=dict(t=20, b=20, l=20, r=20),
                     legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5)
                 )
                 fig_donut.update_traces(textposition='inside', textinfo='percent+label')
