@@ -397,7 +397,7 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
     "TỔNG QUAN", "DÒNG TIỀN", "ĐẦU TƯ", "TIẾT KIỆM", "BĐS & TÍN DỤNG"
 ])
 
-# --- TAB 0: TỔNG QUAN (TÍCH HỢP DONUT CHART & CONTAINER MỚI) ---
+# --- TAB 0: TỔNG QUAN ---
 with tab_home:
     try:
         res_savings = supabase.table("savings").select("amount").execute()
@@ -431,12 +431,10 @@ with tab_home:
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tai_san_rong = tong_tai_san - no_khoan_vay
     
-    # Sử dụng st.container(border=True) để đóng khung các thẻ KPI card hiện đại
     c_left, c_right = st.columns([1.6, 1])
     with c_left:
         with st.container(border=True):
             st.markdown('<div class="metric-title">💰 TÀI SẢN RÒNG HIỆN TẠI (NET WORTH)</div>', unsafe_allow_html=True)
-            # Áp dụng màu đỏ cảnh báo nếu tài sản ròng âm, xanh lá nếu dương
             color_net_worth = "#ef4444" if tai_san_rong < 0 else "#10b981"
             st.markdown(f"""
             <div style="font-family: 'Space Grotesk'; font-size: 2.8rem; font-weight: 700; color: {color_net_worth}; margin: 5px 0;">
@@ -475,13 +473,11 @@ with tab_home:
 
     st.markdown("<br/>", unsafe_allow_html=True)
     
-    # ------------------ TÍCH HỢP DONUT CHART (PLOTLY) ------------------
     if tong_tai_san > 0:
         df_chart = pd.DataFrame({
             "Danh mục": ["Tiết kiệm ngân hàng", "BĐS theo tiến độ", "Chứng chỉ quỹ", "Cổ phiếu"],
             "Giá trị": [tong_tiet_kiem, bds_da_dong, tong_ccq, tong_cp]
         })
-        # Lọc bỏ các mục bằng 0 để biểu đồ sạch sẽ
         df_chart = df_chart[df_chart["Giá trị"] > 0]
         
         fig = px.pie(
@@ -525,7 +521,6 @@ with tab_cashflow:
                 columns={'created_at': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'}
             )
             
-            # Căn phải và format tiền tệ chuẩn xác
             st.dataframe(
                 df_display,
                 column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
