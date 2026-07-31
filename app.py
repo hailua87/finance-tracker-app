@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 from supabase import create_client, Client
+import plotly.express as px
 
 # 1. THIẾT LẬP CẤU HÌNH & KẾT NỐI SUPABASE
 st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", layout="wide")
@@ -12,7 +13,7 @@ def init_supabase():
 
 supabase: Client = init_supabase()
 
-# 2. HALLMARK CUSTOM CSS INJECTION
+# 2. HALLMARK CUSTOM CSS INJECTION & MODERN UI ENHANCEMENTS
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap');
@@ -35,14 +36,6 @@ st.markdown("""
         padding-left: 15px;
         margin-bottom: 25px;
         margin-top: -10px;
-    }
-    
-    .dashboard-card {
-        background-color: #111827;
-        border: 1px solid #1f2937;
-        padding: 20px;
-        border-radius: 12px;
-        margin-bottom: 15px;
     }
     
     .metric-title {
@@ -69,13 +62,17 @@ TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7
 CATS = ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"]
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 
-# 3. KHO MODAL (@st.dialog)
+# 3. KHO MODAL (@st.dialog) - TỐI ƯU GIAO DIỆN COLUMNS & STEP=NONE
 @st.dialog("GHI NHẬN DÒNG TIỀN")
 def modal_cashflow():
     with st.form("cashflow_form", clear_on_submit=True):
-        account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS)
-        category = st.selectbox("Phân loại", CATS)
-        amount = st.number_input("Số tiền (VND)", min_value=0, step=50000)
+        c1, c2 = st.columns(2)
+        with c1:
+            account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS)
+        with c2:
+            category = st.selectbox("Phân loại", CATS)
+            
+        amount = st.number_input("Số tiền (VND)", min_value=0.0, step=None)
         note = st.text_input("Ghi chú")
         
         if st.form_submit_button("LƯU GIAO DỊCH", use_container_width=True):
@@ -93,9 +90,13 @@ def modal_edit_cashflow(row_data):
         idx_acc = BANK_ACCOUNTS.index(row_data['account']) if row_data['account'] in BANK_ACCOUNTS else 0
         idx_cat = CATS.index(row_data['category']) if row_data['category'] in CATS else 0
         
-        account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS, index=idx_acc)
-        category = st.selectbox("Phân loại", CATS, index=idx_cat)
-        amount = st.number_input("Số tiền (VND)", min_value=0, step=50000, value=int(row_data['amount']))
+        c1, c2 = st.columns(2)
+        with c1:
+            account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS, index=idx_acc)
+        with c2:
+            category = st.selectbox("Phân loại", CATS, index=idx_cat)
+            
+        amount = st.number_input("Số tiền (VND)", min_value=0.0, step=None, value=float(row_data['amount']))
         note = st.text_input("Ghi chú", value=row_data['note'] if row_data['note'] else "")
         
         if st.form_submit_button("CẬP NHẬT", use_container_width=True):
@@ -123,7 +124,7 @@ def modal_realestate():
     
     if choice == "➕ Thêm dự án mới...":
         bds_name = st.text_input("Nhập tên dự án mới (VD: TT Avio B.30.05)")
-        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0, step=100000000)
+        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0.0, step=None)
     else:
         bds_name = choice
         gia_tri_hd = existing_projects[choice]
@@ -131,11 +132,19 @@ def modal_realestate():
         
     st.markdown("---")
     dot_tt = st.text_input("Tên đợt thanh toán (VD: Đợt 4 - Cất nóc)")
-    so_tien_tt = st.number_input("Số tiền thanh toán đợt này (VND)", min_value=0, step=10000000)
-    nguon_tien = st.selectbox("Nguồn tiền thanh toán", FUNDING_SOURCES)
     
-    ngay_tt = st.date_input("Hạn thanh toán")
-    trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
+    c1, c2 = st.columns(2)
+    with c1:
+        so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0.0, step=None)
+    with c2:
+        nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES)
+        
+    c3, c4 = st.columns(2)
+    with c3:
+        ngay_tt = st.date_input("Hạn thanh toán")
+    with c4:
+        trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
+        
     ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
     
     if st.button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
@@ -158,26 +167,31 @@ def modal_realestate():
 def modal_edit_realestate(row_data):
     with st.form("edit_realestate_form", clear_on_submit=True):
         bds_name = st.text_input("Tên dự án / Căn hộ", value=row_data['project_name'])
-        cv_val = int(row_data['contract_value']) if 'contract_value' in row_data and pd.notna(row_data['contract_value']) else 0
-        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0, step=100000000, value=cv_val)
+        cv_val = float(row_data['contract_value']) if 'contract_value' in row_data and pd.notna(row_data['contract_value']) else 0.0
+        gia_tri_hd = st.number_input("Giá trị hợp đồng dự án (VND)", min_value=0.0, step=None, value=cv_val)
         st.markdown("---")
         dot_tt = st.text_input("Tên đợt", value=row_data['installment_name'])
-        so_tien_tt = st.number_input("Số tiền thanh toán đợt này (VND)", min_value=0, step=10000000, value=int(row_data['amount']))
         
-        fs_val = row_data['funding_source'] if 'funding_source' in row_data else "Tiền mặt"
-        idx_fs = FUNDING_SOURCES.index(fs_val) if fs_val in FUNDING_SOURCES else 0
-        nguon_tien = st.selectbox("Nguồn tiền thanh toán", FUNDING_SOURCES, index=idx_fs)
-        
-        try:
-            due_dt = pd.to_datetime(row_data['due_date']).date()
-        except:
-            due_dt = date.today()
-        ngay_tt = st.date_input("Hạn thanh toán", value=due_dt)
-        
-        status_opts = ["Chưa thanh toán", "Đã thanh toán"]
-        idx_status = status_opts.index(row_data['status']) if row_data['status'] in status_opts else 0
-        trang_thai = st.selectbox("Trạng thái", status_opts, index=idx_status)
-        
+        c1, c2 = st.columns(2)
+        with c1:
+            so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0.0, step=None, value=float(row_data['amount']))
+        with c2:
+            fs_val = row_data['funding_source'] if 'funding_source' in row_data else "Tiền mặt"
+            idx_fs = FUNDING_SOURCES.index(fs_val) if fs_val in FUNDING_SOURCES else 0
+            nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES, index=idx_fs)
+            
+        c3, c4 = st.columns(2)
+        with c3:
+            try:
+                due_dt = pd.to_datetime(row_data['due_date']).date()
+            except:
+                due_dt = date.today()
+            ngay_tt = st.date_input("Hạn thanh toán", value=due_dt)
+        with c4:
+            status_opts = ["Chưa thanh toán", "Đã thanh toán"]
+            idx_status = status_opts.index(row_data['status']) if row_data['status'] in status_opts else 0
+            trang_thai = st.selectbox("Trạng thái", status_opts, index=idx_status)
+            
         note_val = row_data['note'] if 'note' in row_data and pd.notna(row_data['note']) else ""
         ghi_chu = st.text_input("Ghi chú", value=note_val)
         
@@ -201,20 +215,25 @@ def modal_debt():
         ngan_hang = st.selectbox("Ngân hàng cho vay", BANK_ACCOUNTS + ["Khác"])
         
         st.markdown("**Thông số khởi tạo gốc (Chỉ nhập 1 lần)**")
-        tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0, step=10000000, value=1800000000)
-        tong_thoi_gian = st.number_input("Tổng thời gian vay (Tháng)", min_value=1, step=1, value=180)
-        ngay_giai_ngan = st.date_input("Ngày giải ngân / Bắt đầu vay")
-        
-        st.markdown("**Thông số biến động**")
-        lai_suat = st.number_input("Lãi suất HIỆN HÀNH (%/năm)", min_value=0.0, format="%.2f", value=7.3)
-        
-        st.info("💡 Hệ thống tự động trừ lùi dư nợ. Chỉ sửa lại khoản vay này khi Lãi suất thay đổi hoặc Trả nợ trước hạn.")
+        c1, c2 = st.columns(2)
+        with c1:
+            tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0.0, step=None, value=1800000000.0)
+        with c2:
+            tong_thoi_gian = st.number_input("Tổng thời gian (Tháng)", min_value=1.0, step=None, value=180.0)
+            
+        c3, c4 = st.columns(2)
+        with c3:
+            ngay_giai_ngan = st.date_input("Ngày giải ngân")
+        with c4:
+            lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=None, format="%.2f", value=7.3)
+            
+        st.info("💡 Hệ thống tự động trừ lùi dư nợ. Chỉ sửa khi Lãi suất thay đổi hoặc Trả nợ trước hạn.")
         
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
             try:
                 data = {
                     "purpose": muc_dich, "bank": ngan_hang, "original_principal": tien_vay_ban_dau,
-                    "total_months": tong_thoi_gian, "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
+                    "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
                 }
                 supabase.table("debts").insert(data).execute()
                 st.success("Đã ghi nhận khoản vay!")
@@ -231,23 +250,27 @@ def modal_edit_debt(row_data):
         ngan_hang = st.selectbox("Ngân hàng cho vay", bank_opts, index=idx_bank)
         
         st.markdown("**Thông số gốc**")
-        tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0, step=10000000, value=int(row_data['original_principal']))
-        tong_thoi_gian = st.number_input("Tổng thời gian vay (Tháng)", min_value=1, step=1, value=int(row_data['total_months']))
-        
-        try:
-            start_dt = pd.to_datetime(row_data['start_date']).date()
-        except:
-            start_dt = date.today()
-        ngay_giai_ngan = st.date_input("Ngày giải ngân / Bắt đầu vay", value=start_dt)
-        
-        st.markdown("**Thông số biến động**")
-        lai_suat = st.number_input("Lãi suất HIỆN HÀNH (%/năm)", min_value=0.0, format="%.3f", value=float(row_data['interest_rate']))
-        
+        c1, c2 = st.columns(2)
+        with c1:
+            tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0.0, step=None, value=float(row_data['original_principal']))
+        with c2:
+            tong_thoi_gian = st.number_input("Tổng thời gian (Tháng)", min_value=1.0, step=None, value=float(row_data['total_months']))
+            
+        c3, c4 = st.columns(2)
+        with c3:
+            try:
+                start_dt = pd.to_datetime(row_data['start_date']).date()
+            except:
+                start_dt = date.today()
+            ngay_giai_ngan = st.date_input("Ngày giải ngân", value=start_dt)
+        with c4:
+            lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=None, format="%.3f", value=float(row_data['interest_rate']))
+            
         if st.form_submit_button("CẬP NHẬT KHOẢN VAY", use_container_width=True):
             try:
                 data = {
                     "purpose": muc_dich, "bank": ngan_hang, "original_principal": tien_vay_ban_dau,
-                    "total_months": tong_thoi_gian, "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
+                    "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
                 }
                 supabase.table("debts").update(data).eq("id", row_data['id']).execute()
                 st.success("Đã cập nhật!")
@@ -258,39 +281,66 @@ def modal_edit_debt(row_data):
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
     with st.form("invest_stock_form", clear_on_submit=True):
-        broker = st.selectbox("Nơi lưu ký (CTCK)", ["TCBS", "SSI", "VPS", "VNDirect", "HSC", "Khác"])
-        fund_owner_stock = st.selectbox("Thuộc Portfolio", FUNDS)
+        c1, c2 = st.columns(2)
+        with c1:
+            broker = st.selectbox("Nơi lưu ký (CTCK)", ["TCBS", "SSI", "VPS", "VNDirect", "HSC", "Khác"])
+        with c2:
+            fund_owner_stock = st.selectbox("Thuộc Portfolio", FUNDS)
+            
         ticker = st.text_input("Mã cổ phiếu (VD: VIB, MBB, VCI...)").upper()
         action = st.radio("Lệnh", ["Mua", "Bán"], horizontal=True)
-        volume = st.number_input("Khối lượng (CP)", min_value=100, step=100)
-        price = st.number_input("Giá khớp (VND)", min_value=0)
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            volume = st.number_input("Khối lượng (CP)", min_value=100.0, step=None)
+        with c4:
+            price = st.number_input("Giá khớp (VND)", min_value=0.0, step=None)
+            
         if st.form_submit_button("LƯU LỆNH", use_container_width=True):
             if ticker.strip() == "":
                 st.error("Vui lòng nhập mã cổ phiếu!")
             else:
-                st.success(f"Đã lưu lệnh {action} {volume} CP {ticker} qua {broker}!")
+                st.success(f"Đã lưu lệnh {action} {int(volume)} CP {ticker} qua {broker}!")
 
 @st.dialog("GIAO DỊCH CHỨNG CHỈ QUỸ")
 def modal_ccq():
     with st.form("invest_ccq_form", clear_on_submit=True):
-        platform = st.selectbox("Nền tảng giao dịch", ["TCBS", "Fmarket", "DragonX", "VCB Digibank", "SSIAM"])
-        fund_owner_ccq = st.selectbox("Thuộc Portfolio", FUNDS)
+        c1, c2 = st.columns(2)
+        with c1:
+            platform = st.selectbox("Nền tảng giao dịch", ["TCBS", "Fmarket", "DragonX", "VCB Digibank", "SSIAM"])
+        with c2:
+            fund_owner_ccq = st.selectbox("Thuộc Portfolio", FUNDS)
+            
         fund_ticker = st.text_input("Mã Quỹ (VD: DCDS, VESAF...)").upper()
         action_ccq = st.radio("Lệnh quỹ", ["Mua (SIP)", "Bán"], horizontal=True)
-        volume_ccq = st.number_input("Số lượng CCQ", min_value=0.0, step=10.0, format="%.2f")
-        nav_price = st.number_input("Giá NAV (VND)", min_value=0)
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            volume_ccq = st.number_input("Số lượng CCQ", min_value=0.0, step=None, format="%.2f")
+        with c4:
+            nav_price = st.number_input("Giá NAV (VND)", min_value=0.0, step=None)
+            
         if st.form_submit_button("LƯU GIAO DỊCH QUỸ", use_container_width=True):
             st.success(f"Đã lưu lệnh {fund_ticker} qua {platform}!")
 
 @st.dialog("THÊM KHOẢN GỬI TIẾT KIỆM")
 def modal_savings():
     with st.form("new_deposit_form", clear_on_submit=True):
-        new_fund = st.selectbox("Chọn Portfolio", FUNDS)
-        new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS)
-        new_amount = st.number_input("Số tiền (VND)", min_value=0, step=1000000)
-        new_date = st.date_input("Ngày gửi")
-        new_term = st.selectbox("Kỳ hạn", TERMS)
-        new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, format="%.2f")
+        c1, c2 = st.columns(2)
+        with c1:
+            new_fund = st.selectbox("Chọn Portfolio", FUNDS)
+        with c2:
+            new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS)
+            
+        new_amount = st.number_input("Số tiền gốc (VND)", min_value=0.0, step=None)
+        
+        c3, c4 = st.columns(2)
+        with c3:
+            new_date = st.date_input("Ngày gửi")
+        with c4:
+            new_term = st.selectbox("Kỳ hạn", TERMS)
+            
+        new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=None, format="%.2f")
         
         if st.form_submit_button("LƯU KHOẢN GỬI", use_container_width=True):
             try:
@@ -307,24 +357,28 @@ def modal_savings():
 @st.dialog("SỬA KHOẢN GỬI TIẾT KIỆM")
 def modal_edit_savings(row_data):
     with st.form("edit_deposit_form", clear_on_submit=True):
-        idx_fund = FUNDS.index(row_data['fund_owner']) if row_data['fund_owner'] in FUNDS else 0
-        new_fund = st.selectbox("Chọn Portfolio", FUNDS, index=idx_fund)
+        c1, c2 = st.columns(2)
+        with c1:
+            idx_fund = FUNDS.index(row_data['fund_owner']) if row_data['fund_owner'] in FUNDS else 0
+            new_fund = st.selectbox("Chọn Portfolio", FUNDS, index=idx_fund)
+        with c2:
+            idx_bank = BANK_ACCOUNTS.index(row_data['bank']) if row_data['bank'] in BANK_ACCOUNTS else 0
+            new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS, index=idx_bank)
+            
+        new_amount = st.number_input("Số tiền gốc (VND)", min_value=0.0, step=None, value=float(row_data['amount']))
         
-        idx_bank = BANK_ACCOUNTS.index(row_data['bank']) if row_data['bank'] in BANK_ACCOUNTS else 0
-        new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS, index=idx_bank)
-        
-        new_amount = st.number_input("Số tiền (VND)", min_value=0, step=1000000, value=int(row_data['amount']))
-        
-        try:
-            dep_dt = pd.to_datetime(row_data['deposit_date']).date()
-        except:
-            dep_dt = date.today()
-        new_date = st.date_input("Ngày gửi", value=dep_dt)
-        
-        idx_term = TERMS.index(row_data['term']) if row_data['term'] in TERMS else 0
-        new_term = st.selectbox("Kỳ hạn", TERMS, index=idx_term)
-        
-        new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, format="%.2f", value=float(row_data['interest_rate']))
+        c3, c4 = st.columns(2)
+        with c3:
+            try:
+                dep_dt = pd.to_datetime(row_data['deposit_date']).date()
+            except:
+                dep_dt = date.today()
+            new_date = st.date_input("Ngày gửi", value=dep_dt)
+        with c4:
+            idx_term = TERMS.index(row_data['term']) if row_data['term'] in TERMS else 0
+            new_term = st.selectbox("Kỳ hạn", TERMS, index=idx_term)
+            
+        new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=None, format="%.2f", value=float(row_data['interest_rate']))
         
         if st.form_submit_button("CẬP NHẬT SỔ TIẾT KIỆM", use_container_width=True):
             try:
@@ -343,7 +397,7 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
     "TỔNG QUAN", "DÒNG TIỀN", "ĐẦU TƯ", "TIẾT KIỆM", "BĐS & TÍN DỤNG"
 ])
 
-# --- TAB 0: TỔNG QUAN ---
+# --- TAB 0: TỔNG QUAN (TÍCH HỢP DONUT CHART & CONTAINER MỚI) ---
 with tab_home:
     try:
         res_savings = supabase.table("savings").select("amount").execute()
@@ -377,33 +431,37 @@ with tab_home:
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tai_san_rong = tong_tai_san - no_khoan_vay
     
+    # Sử dụng st.container(border=True) để đóng khung các thẻ KPI card hiện đại
     c_left, c_right = st.columns([1.6, 1])
     with c_left:
-        st.markdown(f"""
-        <div class="dashboard-card" style="border-left: 5px solid #10b981; background: linear-gradient(135deg, #111827 0%, #0f172a 100%);">
-            <div class="metric-title">💰 TÀI SẢN RÒNG HIỆN TẠI (NET WORTH)</div>
-            <div style="font-family: 'Space Grotesk'; font-size: 2.8rem; font-weight: 700; color: #10b981; margin: 5px 0;">
+        with st.container(border=True):
+            st.markdown('<div class="metric-title">💰 TÀI SẢN RÒNG HIỆN TẠI (NET WORTH)</div>', unsafe_allow_html=True)
+            # Áp dụng màu đỏ cảnh báo nếu tài sản ròng âm, xanh lá nếu dương
+            color_net_worth = "#ef4444" if tai_san_rong < 0 else "#10b981"
+            st.markdown(f"""
+            <div style="font-family: 'Space Grotesk'; font-size: 2.8rem; font-weight: 700; color: {color_net_worth}; margin: 5px 0;">
                 {tai_san_rong:,.0f} ₫
             </div>
             <div style="color: #94a3b8; font-size: 0.9rem;">
                 Tổng tài sản: <b style="color: #f8fafc;">{tong_tai_san:,.0f} ₫</b> &nbsp;|&nbsp; Tổng dư nợ: <b style="color: #ef4444;">{no_khoan_vay:,.0f} ₫</b>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
         
     with c_right:
-        ty_le_don_bay = (no_khoan_vay / (tong_tai_san if tong_tai_san > 0 else 1)) * 100
-        st.markdown(f"""
-        <div class="dashboard-card">
-            <div class="metric-title">📊 TỶ LỆ ĐÒN BẨY TÀI CHÍNH</div>
+        with st.container(border=True):
+            ty_le_don_bay = (no_khoan_vay / (tong_tai_san if tong_tai_san > 0 else 1)) * 100
+            st.markdown('<div class="metric-title">📊 TỶ LỆ ĐÒN BẨY TÀI CHÍNH</div>', unsafe_allow_html=True)
+            st.markdown(f"""
             <div style="font-family: 'Space Grotesk'; font-size: 1.8rem; font-weight: 700; color: #f8fafc; margin: 10px 0;">
                 {ty_le_don_bay:.1f}% <span style="font-size: 1rem; color: #94a3b8; font-weight: 400;">vốn vay</span>
             </div>
-        </div>
-        """, unsafe_allow_html=True)
+            <div style="color: #38bdf8; font-size: 0.85rem;">
+                💡 Ngưỡng an toàn khuyến nghị < 50%.
+            </div>
+            """, unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
-    st.subheader("CƠ CẤU PHÂN BỔ TÀI SẢN")
+    st.subheader("CƠ CẤU PHÂN BỔ TÀI SẢN & BIỂU ĐỒ TRỰC QUAN")
     
     col_bar1, col_bar2, col_bar3, col_bar4 = st.columns(4)
     with col_bar1:
@@ -414,6 +472,40 @@ with tab_home:
         st.metric("Chứng chỉ quỹ", f"{tong_ccq:,.0f} ₫")
     with col_bar4:
         st.metric("Cổ phiếu đầu tư", f"{tong_cp:,.0f} ₫")
+
+    st.markdown("<br/>", unsafe_allow_html=True)
+    
+    # ------------------ TÍCH HỢP DONUT CHART (PLOTLY) ------------------
+    if tong_tai_san > 0:
+        df_chart = pd.DataFrame({
+            "Danh mục": ["Tiết kiệm ngân hàng", "BĐS theo tiến độ", "Chứng chỉ quỹ", "Cổ phiếu"],
+            "Giá trị": [tong_tiet_kiem, bds_da_dong, tong_ccq, tong_cp]
+        })
+        # Lọc bỏ các mục bằng 0 để biểu đồ sạch sẽ
+        df_chart = df_chart[df_chart["Giá trị"] > 0]
+        
+        fig = px.pie(
+            df_chart, 
+            names="Danh mục", 
+            values="Giá trị", 
+            hole=0.55,
+            color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6"]
+        )
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            font_color="#f8fafc",
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+            margin=dict(t=10, b=10, l=10, r=10)
+        )
+        fig.update_traces(textposition='inside', textinfo='percent+label')
+        
+        col_c1, col_c2, col_c3 = st.columns([0.5, 2, 0.5])
+        with col_c2:
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Chưa có dữ liệu tài sản để trực quan hóa biểu đồ.")
+        
     st.divider()
 
 # --- TAB 1: DÒNG TIỀN ---
@@ -433,6 +525,7 @@ with tab_cashflow:
                 columns={'created_at': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'}
             )
             
+            # Căn phải và format tiền tệ chuẩn xác
             st.dataframe(
                 df_display,
                 column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
@@ -532,9 +625,7 @@ with tab_savings:
                 use_container_width=True, hide_index=True
             )
             
-            # Gỡ bỏ st.expander để sửa lỗi UI _arrow_
             st.markdown(f"**⚙️ TÙY CHỈNH DỮ LIỆU SỔ TIẾT KIỆM ({fund_name.upper()})**")
-            
             action_id_sav = st.selectbox(
                 "Chọn sổ tiết kiệm để cập nhật:", 
                 fund_data['id'].tolist(), 
