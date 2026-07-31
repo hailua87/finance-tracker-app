@@ -64,15 +64,15 @@ def color_profit_loss(val):
     return f'color: {color}; font-weight: bold; font-family: "Space Grotesk";'
 
 BANK_ACCOUNTS = ["VCB chồng", "TCB chồng", "HSBC chồng", "UOB chồng", "UOB vợ", "TCB vợ"]
-# Cập nhật danh sách kỳ hạn theo yêu cầu
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
+CATS = ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"]
 
 # 3. KHO MODAL (@st.dialog)
 @st.dialog("GHI NHẬN DÒNG TIỀN")
 def modal_cashflow():
     with st.form("cashflow_form", clear_on_submit=True):
         account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS)
-        category = st.selectbox("Phân loại", ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"])
+        category = st.selectbox("Phân loại", CATS)
         amount = st.number_input("Số tiền (VND)", min_value=0, step=50000)
         note = st.text_input("Ghi chú")
         
@@ -81,6 +81,27 @@ def modal_cashflow():
                 data = {"account": account, "amount": amount, "category": category, "note": note}
                 supabase.table("cashflow").insert(data).execute()
                 st.success(f"Đã lưu thành công {amount:,.0f} VND!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi khi lưu: {e}")
+
+@st.dialog("SỬA GIAO DỊCH")
+def modal_edit_cashflow(row_data):
+    with st.form("edit_cashflow_form", clear_on_submit=True):
+        # Lấy lại giá trị cũ để đưa vào Form
+        idx_acc = BANK_ACCOUNTS.index(row_data['account']) if row_data['account'] in BANK_ACCOUNTS else 0
+        idx_cat = CATS.index(row_data['category']) if row_data['category'] in CATS else 0
+        
+        account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS, index=idx_acc)
+        category = st.selectbox("Phân loại", CATS, index=idx_cat)
+        amount = st.number_input("Số tiền (VND)", min_value=0, step=50000, value=int(row_data['amount']))
+        note = st.text_input("Ghi chú", value=row_data['note'] if row_data['note'] else "")
+        
+        if st.form_submit_button("CẬP NHẬT", use_container_width=True):
+            try:
+                data = {"account": account, "amount": amount, "category": category, "note": note}
+                supabase.table("cashflow").update(data).eq("id", row_data['id']).execute()
+                st.success(f"Đã cập nhật thành công!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Lỗi khi lưu: {e}")
@@ -173,9 +194,7 @@ with tab_home:
     except:
         tong_tiet_kiem = 0
 
-    # Các thông số đã được reset về 0 để chờ kết nối DB
     tong_ccq, tong_cp, bds_da_dong, no_khoan_vay = 0, 0, 0, 0 
-    
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tai_san_rong = tong_tai_san - no_khoan_vay
     
@@ -194,7 +213,7 @@ with tab_home:
         """, unsafe_allow_html=True)
         
     with c_right:
-        ty_le_don_bay = (no_khoan_vay / tong_tai_san * 100) if tong_tai_san > 0 else 0
+        ty_le_don_bay = (no_khoan_vay / (tong_tai_san if tong_tai_san > 0 else 1)) * 100
         st.markdown(f"""
         <div class="dashboard-card">
             <div class="metric-title">📊 TỶ LỆ ĐÒN BẨY TÀI CHÍNH</div>
@@ -235,20 +254,35 @@ with tab_cashflow:
                 columns={'created_at': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'}
             )
             
+            # Cấu hình format="%,.0f ₫" giúp hiển thị dấu phẩy phân cách hàng ngàn (VD: 1,000 ₫)
             st.dataframe(
                 df_display,
-                column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%d ₫")},
+                column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
                 use_container_width=True, hide_index=True
             )
             
-            with st.expander("TÙY CHỌN: XÓA GIAO DỊCH NHẬP SAI"):
-                del_id = st.selectbox("Chọn giao dịch cần xóa (Dựa theo Thời gian & Số tiền):", 
-                                      df_cf['id'].tolist(), 
-                                      format_func=lambda x: f"{df_cf[df_cf['id'] == x]['created_at'].values[0]} - {df_cf[df_cf['id'] == x]['amount'].values[0]:,.0f} ₫")
-                if st.button("Xóa giao dịch này"):
-                    supabase.table("cashflow").delete().eq("id", del_id).execute()
+            st.markdown("---")
+            st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BẢNG")
+            st.caption("Chọn một giao dịch bên dưới để Cập nhật lại số liệu hoặc Xóa bỏ.")
+            
+            action_id = st.selectbox(
+                "Chọn giao dịch:", 
+                df_cf['id'].tolist(), 
+                format_func=lambda x: f"{df_cf[df_cf['id'] == x]['created_at'].values[0]} | {df_cf[df_cf['id'] == x]['category'].values[0]} | {df_cf[df_cf['id'] == x]['amount'].values[0]:,.0f} ₫"
+            )
+            
+            selected_row = df_cf[df_cf['id'] == action_id].iloc[0]
+            
+            col_a1, col_a2, _ = st.columns([1.5, 1.5, 3])
+            with col_a1:
+                if st.button("✏️ SỬA GIAO DỊCH NÀY", use_container_width=True):
+                    modal_edit_cashflow(selected_row)
+            with col_a2:
+                if st.button("❌ XÓA GIAO DỊCH NÀY", use_container_width=True):
+                    supabase.table("cashflow").delete().eq("id", action_id).execute()
                     st.success("Đã xóa giao dịch!")
                     st.rerun()
+
         else:
             st.info("Chưa có giao dịch nào được ghi nhận.")
     except Exception as e:
@@ -294,13 +328,14 @@ with tab_savings:
             fund_data = pd.DataFrame()
             total_goc = 0
             
-        st.markdown(f"**Tổng vốn:** <span style='color:#10b981; font-size:18px'>{total_goc:,.0f} VND</span>", unsafe_allow_html=True)
+        st.markdown(f"**Tổng vốn:** <span style='color:#10b981; font-size:18px'>{total_goc:,.0f} ₫</span>", unsafe_allow_html=True)
         
         if not fund_data.empty:
             st.dataframe(
                 fund_data[['bank', 'deposit_date', 'term', 'interest_rate', 'amount']].rename(
                     columns={'bank': 'Ngân hàng', 'deposit_date': 'Ngày gửi', 'term': 'Kỳ hạn', 'interest_rate': 'Lãi suất (%)', 'amount': 'Tiền gốc (VND)'}
-                ).style.format({"Lãi suất (%)": "{:.1f}", "Tiền gốc (VND)": "{:,.0f}"}),
+                ),
+                column_config={"Tiền gốc (VND)": st.column_config.NumberColumn("Tiền gốc (VND)", format="%,.0f ₫"), "Lãi suất (%)": st.column_config.NumberColumn("Lãi suất (%)", format="%.1f")},
                 use_container_width=True, hide_index=True
             )
         else:
