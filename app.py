@@ -39,7 +39,7 @@ st.markdown("""
     }
     
     .metric-title {
-        font-size: 0.85rem;
+        font-size: 0.8rem;
         text-transform: uppercase;
         letter-spacing: 0.05em;
         color: #94a3b8;
@@ -62,7 +62,19 @@ BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS
 
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
-CATS = ["Ăn uống", "Mẹ & Bé", "Nhà cửa", "Đầu tư", "Lương/Thu nhập", "Khác"]
+
+# BỘ DANH MỤC CHUẨN CHO GIA ĐÌNH TRẺ CÓ CON ĐI HỌC
+CATS = [
+    "Lương/Thu nhập", 
+    "Ăn uống & Sinh hoạt", 
+    "Giáo dục (Con cái)", 
+    "Nhà cửa & Tiện ích", 
+    "Sức khỏe & Y tế", 
+    "Đi lại & Phương tiện", 
+    "Hiếu hỉ & Mua sắm", 
+    "Đầu tư & Trả nợ", 
+    "Khác"
+]
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 
 # 3. KHO MODAL (@st.dialog)
@@ -114,7 +126,7 @@ def modal_edit_cashflow(row_data):
 @st.dialog("CẤU HÌNH SỐ DƯ GỐC BAN ĐẦU")
 def modal_opening_balance():
     with st.form("opening_balance_form"):
-        st.markdown("Nhập số dư gốc ban đầu của các tài khoản tại mốc xuất phát hệ thống:")
+        st.markdown("Nhập số dư gốc ban đầu tại mốc xuất phát lịch sử (Ví dụ: Chốt trước 01/08/2026):")
         
         try:
             res = supabase.table("opening_balances").select("*").execute()
@@ -538,7 +550,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN ---
+# --- TAB 1: DÒNG TIỀN (CÂN ĐỐI 5 THẺ KPIS ĐỒNG NHẤT CHIỀU CAO) ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -594,7 +606,6 @@ with tab_cashflow:
     else:
         df_filtered = pd.DataFrame()
 
-    # TỰ ĐỘNG TÍNH TOÁN SỐ DƯ ĐẦU KỲ CUỐN CHIẾU THEO THỜI GIAN BỘ LỌC
     filter_start_date = date_range[0] if isinstance(date_range, tuple) and len(date_range) > 0 else default_start
 
     try:
@@ -635,25 +646,29 @@ with tab_cashflow:
 
     tong_quy = (total_debit_opening + dong_tien_thuan) - total_credit_opening
 
-    kc1, kc2, kc3, kc4 = st.columns(4)
+    # CÂN ĐỐI 5 THẺ KPIS ĐỒNG NHẤT CHIỀU CAO (CHIA THÀNH 5 CỘT RIÊNG BIỆT)
+    kc1, kc2, kc3, kc4, kc5 = st.columns(5)
     with kc1:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">🏦 TK THANH TOÁN (ĐẦU KỲ)</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.4rem; font-weight: 700; color: #38bdf8;'>{total_debit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">🏦 TK THANH TOÁN</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.3rem; font-weight: 700; color: #38bdf8;'>{total_debit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc2:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">💳 DƯ NỢ THẺ TÍN DỤNG</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.4rem; font-weight: 700; color: #ef4444;'>-{total_credit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">💳 DƯ NỢ TÍN DỤNG</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.3rem; font-weight: 700; color: #ef4444;'>-{total_credit_opening:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc3:
         with st.container(border=True):
-            st.markdown('<div class="metric-title">📈 THU / 📉 CHI (KỲ NÀY)</div>', unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.2rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.2rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown('<div class="metric-title">📈 TỔNG THU KỲ</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.3rem; font-weight: 700; color: #10b981;'>+{total_thu:,.0f} ₫</div>", unsafe_allow_html=True)
     with kc4:
+        with st.container(border=True):
+            st.markdown('<div class="metric-title">📉 TỔNG CHI KỲ</div>', unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.3rem; font-weight: 700; color: #ef4444;'>-{total_chi:,.0f} ₫</div>", unsafe_allow_html=True)
+    with kc5:
         with st.container(border=True):
             st.markdown('<div class="metric-title">⚖️ TỔNG QUỸ RÒNG</div>', unsafe_allow_html=True)
             color_dt = "#10b981" if tong_quy >= 0 else "#ef4444"
-            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.5rem; font-weight: 700; color: {color_dt};'>{tong_quy:,.0f} ₫</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-family: Space Grotesk; font-size: 1.3rem; font-weight: 700; color: {color_dt};'>{tong_quy:,.0f} ₫</div>", unsafe_allow_html=True)
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
