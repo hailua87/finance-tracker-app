@@ -88,7 +88,6 @@ def modal_cashflow():
 @st.dialog("SỬA GIAO DỊCH")
 def modal_edit_cashflow(row_data):
     with st.form("edit_cashflow_form", clear_on_submit=True):
-        # Lấy lại giá trị cũ để đưa vào Form
         idx_acc = BANK_ACCOUNTS.index(row_data['account']) if row_data['account'] in BANK_ACCOUNTS else 0
         idx_cat = CATS.index(row_data['category']) if row_data['category'] in CATS else 0
         
@@ -117,16 +116,33 @@ def modal_realestate():
         if st.form_submit_button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
             st.success("Đã ghi nhận tiến độ BĐS mới!")
 
-@st.dialog("THÊM KHOẢN VAY / TÍN DỤNG")
+@st.dialog("THÊM / CẬP NHẬT KHOẢN VAY")
 def modal_debt():
     with st.form("debt_form", clear_on_submit=True):
-        muc_dich = st.text_input("Mục đích vay")
+        muc_dich = st.text_input("Mục đích vay (VD: Chung cư Q7 Riverside)")
         ngan_hang = st.selectbox("Ngân hàng cho vay", BANK_ACCOUNTS + ["Khác"])
-        du_no = st.number_input("Dư nợ gốc (VND)", min_value=0, step=10000000)
-        lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, format="%.1f")
-        goc_lai_thang = st.number_input("Tiền gốc & lãi phải trả hàng tháng (VND)", min_value=0, step=500000)
+        
+        st.markdown("**Thông số tính toán (Cập nhật theo thực tế)**")
+        du_no = st.number_input("Dư nợ gốc HIỆN TẠI (VND)", min_value=0, step=10000000, value=1800000000)
+        thang_con_lai = st.number_input("Thời gian vay CÒN LẠI (Tháng)", min_value=1, step=1, value=180)
+        lai_suat = st.number_input("Lãi suất HIỆN HÀNH (%/năm)", min_value=0.0, format="%.2f", value=7.3)
+        
+        st.info("💡 Gốc & Lãi sẽ được hệ thống tự động tính theo công thức dư nợ giảm dần.")
+        
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
-            st.success("Đã ghi nhận khoản vay mới!")
+            try:
+                data = {
+                    "purpose": muc_dich,
+                    "bank": ngan_hang,
+                    "remaining_principal": du_no,
+                    "remaining_months": thang_con_lai,
+                    "interest_rate": lai_suat
+                }
+                supabase.table("debts").insert(data).execute()
+                st.success("Đã ghi nhận khoản vay mới!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Lỗi khi lưu (Hãy đảm bảo bạn đã tạo bảng 'debts' trên Supabase): {e}")
 
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
@@ -188,13 +204,21 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 
 # --- TAB 0: TỔNG QUAN ---
 with tab_home:
+    # Fetch Tiết kiệm
     try:
         res_savings = supabase.table("savings").select("amount").execute()
         tong_tiet_kiem = sum([row["amount"] for row in res_savings.data]) if res_savings.data else 0
     except:
         tong_tiet_kiem = 0
+        
+    # Fetch Nợ khoản vay
+    try:
+        res_debts = supabase.table("debts").select("remaining_principal").execute()
+        no_khoan_vay = sum([row["remaining_principal"] for row in res_debts.data]) if res_debts.data else 0
+    except:
+        no_khoan_vay = 0
 
-    tong_ccq, tong_cp, bds_da_dong, no_khoan_vay = 0, 0, 0, 0 
+    tong_ccq, tong_cp, bds_da_dong = 0, 0, 0 
     tong_tai_san = tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong
     tai_san_rong = tong_tai_san - no_khoan_vay
     
@@ -254,7 +278,6 @@ with tab_cashflow:
                 columns={'created_at': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'}
             )
             
-            # Cấu hình format="%,.0f ₫" giúp hiển thị dấu phẩy phân cách hàng ngàn (VD: 1,000 ₫)
             st.dataframe(
                 df_display,
                 column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
@@ -349,7 +372,7 @@ with tab_realestate:
         if st.button("+ THÊM TIẾN ĐỘ BĐS", use_container_width=True):
             modal_realestate()
     with col_debt_btn:
-        if st.button("+ THÊM KHOẢN VAY MỚI", use_container_width=True):
+        if st.button("+ THÊM/CẬP NHẬT KHOẢN VAY", use_container_width=True):
             modal_debt()
             
     st.markdown("<br/>", unsafe_allow_html=True)
@@ -359,4 +382,37 @@ with tab_realestate:
     st.divider()
     
     st.subheader("Khoản vay tín dụng & Dư nợ")
-    st.info("Dữ liệu dư nợ hiện đang trống. Vui lòng thêm khoản vay mới.")
+    
+    try:
+        res_debt = supabase.table("debts").select("*").execute()
+        df_vay = pd.DataFrame(res_debt.data) if res_debt.data else pd.DataFrame()
+    except:
+        df_vay = pd.DataFrame()
+
+    if not df_vay.empty and "remaining_principal" in df_vay.columns:
+        # Đổi tên cột hiển thị
+        df_vay = df_vay.rename(columns={
+            "purpose": "Mục đích", 
+            "bank": "Ngân hàng", 
+            "remaining_principal": "Dư nợ hiện tại (VND)", 
+            "remaining_months": "Tháng còn lại", 
+            "interest_rate": "Lãi suất (%/năm)"
+        })
+        
+        # LOGIC TÀI CHÍNH TỰ ĐỘNG TÍNH TOÁN (Dư nợ giảm dần, Gốc chia đều)
+        df_vay["Gốc tháng (VND)"] = df_vay["Dư nợ hiện tại (VND)"] / df_vay["Tháng còn lại"]
+        df_vay["Lãi tháng (VND)"] = df_vay["Dư nợ hiện tại (VND)"] * (df_vay["Lãi suất (%/năm)"] / 100 / 12)
+        df_vay["Tổng phải trả (Tháng)"] = df_vay["Gốc tháng (VND)"] + df_vay["Lãi tháng (VND)"]
+        
+        st.dataframe(
+            df_vay[['Mục đích', 'Ngân hàng', 'Dư nợ hiện tại (VND)', 'Tháng còn lại', 'Lãi suất (%/năm)', 'Gốc tháng (VND)', 'Lãi tháng (VND)', 'Tổng phải trả (Tháng)']].style.format({
+                "Dư nợ hiện tại (VND)": "{:,.0f} ₫",
+                "Gốc tháng (VND)": "{:,.0f} ₫",
+                "Lãi tháng (VND)": "{:,.0f} ₫",
+                "Tổng phải trả (Tháng)": "{:,.0f} ₫",
+                "Lãi suất (%/năm)": "{:.2f}%"
+            }),
+            use_container_width=True, hide_index=True
+        )
+    else:
+        st.info("Dữ liệu dư nợ hiện đang trống. Vui lòng thêm khoản vay mới.")
