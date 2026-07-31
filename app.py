@@ -482,7 +482,7 @@ with tab_invest:
                 modal_ccq()
         st.info("Danh mục Chứng chỉ quỹ hiện đang trống.")
 
-# --- TAB 3: TIẾT KIỆM (Nâng cấp Lãi dự kiến & Ngày đáo hạn) ---
+# --- TAB 3: TIẾT KIỆM ---
 with tab_savings:
     col_btn3, _ = st.columns([1, 3])
     with col_btn3:
@@ -507,7 +507,6 @@ with tab_savings:
         st.markdown(f"**Tổng vốn:** <span style='color:#10b981; font-size:18px'>{total_goc:,.0f} ₫</span>", unsafe_allow_html=True)
         
         if not fund_data.empty:
-            # Thuật toán tính Ngày đáo hạn và Lãi dự kiến
             fund_data['term_months'] = fund_data['term'].apply(lambda x: int(x.split()[0]) if "Tháng" in x else 0)
             
             fund_data['Ngày đáo hạn'] = fund_data.apply(
@@ -533,26 +532,27 @@ with tab_savings:
                 use_container_width=True, hide_index=True
             )
             
-            # Tính năng Sửa/Xóa cho sổ tiết kiệm
-            with st.expander(f"⚙️ Tùy chỉnh dữ liệu sổ tiết kiệm ({fund_name})"):
-                action_id_sav = st.selectbox(
-                    "Chọn sổ tiết kiệm:", 
-                    fund_data['id'].tolist(), 
-                    format_func=lambda x: f"{fund_data[fund_data['id'] == x]['bank'].values[0]} | {fund_data[fund_data['id'] == x]['amount'].values[0]:,.0f} ₫",
-                    key=f"select_sav_{fund_name}"
-                )
-                
-                selected_sav_row = fund_data[fund_data['id'] == action_id_sav].iloc[0]
-                
-                col_s1, col_s2, _ = st.columns([1.5, 1.5, 3])
-                with col_s1:
-                    if st.button("✏️ SỬA SỔ NÀY", use_container_width=True, key=f"edit_sav_{fund_name}"):
-                        modal_edit_savings(selected_sav_row)
-                with col_s2:
-                    if st.button("❌ TẤT TOÁN / XÓA SỔ NÀY", use_container_width=True, key=f"del_sav_{fund_name}"):
-                        supabase.table("savings").delete().eq("id", action_id_sav).execute()
-                        st.success("Đã xóa sổ tiết kiệm!")
-                        st.rerun()
+            # Gỡ bỏ st.expander để sửa lỗi UI _arrow_
+            st.markdown(f"**⚙️ TÙY CHỈNH DỮ LIỆU SỔ TIẾT KIỆM ({fund_name.upper()})**")
+            
+            action_id_sav = st.selectbox(
+                "Chọn sổ tiết kiệm để cập nhật:", 
+                fund_data['id'].tolist(), 
+                format_func=lambda x: f"{fund_data[fund_data['id'] == x]['bank'].values[0]} | Gốc: {fund_data[fund_data['id'] == x]['amount'].values[0]:,.0f} ₫",
+                key=f"select_sav_{fund_name}"
+            )
+            
+            selected_sav_row = fund_data[fund_data['id'] == action_id_sav].iloc[0]
+            
+            col_s1, col_s2, _ = st.columns([1.5, 1.5, 3])
+            with col_s1:
+                if st.button("✏️ SỬA SỔ NÀY", use_container_width=True, key=f"edit_sav_{fund_name}"):
+                    modal_edit_savings(selected_sav_row)
+            with col_s2:
+                if st.button("❌ TẤT TOÁN / XÓA SỔ NÀY", use_container_width=True, key=f"del_sav_{fund_name}"):
+                    supabase.table("savings").delete().eq("id", action_id_sav).execute()
+                    st.success("Đã xóa sổ tiết kiệm!")
+                    st.rerun()
         else:
             st.caption("Chưa có sổ tiết kiệm nào trong quỹ này.")
         st.divider()
@@ -688,5 +688,6 @@ with tab_realestate:
                 supabase.table("debts").delete().eq("id", action_id_debt).execute()
                 st.success("Đã xóa khoản vay!")
                 st.rerun()
+
     else:
         st.info("Dữ liệu dư nợ hiện đang trống. Vui lòng thêm khoản vay mới.")
