@@ -196,6 +196,28 @@ def modal_cashflow():
     with c2:
         _ai = BANK_ACCOUNTS.index(st.session_state.last_account) if st.session_state.last_account in BANK_ACCOUNTS else 0
         account = st.selectbox("Tài khoản", BANK_ACCOUNTS, index=_ai, key="cf_acc")
+        
+    try:
+        import pandas as pd
+        df_ob_loc = fetch_table("opening_balances")
+        df_cf_loc = fetch_table("cashflow")
+        ob_val = 0.0
+        if not df_ob_loc.empty and 'account' in df_ob_loc.columns:
+            ob_row = df_ob_loc[df_ob_loc['account'] == account]
+            if not ob_row.empty:
+                col_ob = 'balance' if 'balance' in ob_row.columns else 'amount'
+                ob_val = pd.to_numeric(ob_row[col_ob], errors='coerce').fillna(0).sum()
+        cf_val = 0.0
+        if not df_cf_loc.empty and 'account' in df_cf_loc.columns:
+            acc_cf = df_cf_loc[df_cf_loc['account'] == account]
+            if not acc_cf.empty:
+                acc_cf['amount_num'] = pd.to_numeric(acc_cf['amount'], errors='coerce').fillna(0)
+                inc = acc_cf[acc_cf['category'] == 'Lương/Thu nhập']['amount_num'].sum()
+                exp = acc_cf[acc_cf['category'] != 'Lương/Thu nhập']['amount_num'].sum()
+                cf_val = inc - exp
+        st.caption(f"💡 Số dư khả dụng ({account}): **{ob_val + cf_val:,.0f} ₫**")
+    except: pass
+    
     note = st.text_input("Ghi chú", key="cf_note")
     if st.button("💾 LƯU GIAO DỊCH", use_container_width=True, type="primary", key="cf_save"):
         amt = parse_smart_amount(amount_str)
@@ -203,11 +225,15 @@ def modal_cashflow():
             st.error("⚠️ Nhập số tiền hợp lệ!")
         else:
             created_at_str = f"{trade_date} {time.strftime('%H:%M:%S')}"
-            supabase.table("cashflow").insert({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).execute()
-            st.session_state.last_account = account
-            st.session_state.cf_amount_str = ""
-            st.toast("✅ Đã lưu!", icon="🔥")
-            clear_cache_and_rerun()
+            try:
+                supabase.table("cashflow").insert({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).execute()
+                st.session_state.last_account = account
+                st.session_state.cf_amount_str = ""
+                st.success("✅ Đã lưu giao dịch thành công!")
+                time.sleep(1)
+                clear_cache_and_rerun()
+            except Exception as e:
+                st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
@@ -221,16 +247,20 @@ def modal_stock():
         with c3: vol_str = st.text_input("Khối lượng", value="100")
         with c4: price_str = st.text_input("Giá (VD: 22.5k)")
         c5, c6 = st.columns(2)
-        with c5: trade_date = st.date_input("Ngày GD")
+        with c5: trade_date = st.date_input("Ngày GD", value=date.today())
         with c6: note = st.text_input("Ghi chú")
         if st.form_submit_button("💾 LƯU LỆNH", use_container_width=True):
             vol, price = parse_smart_amount(vol_str), parse_smart_amount(price_str)
             if not ticker.strip(): st.error("⚠️ Nhập mã!")
             elif vol <= 0 or price <= 0: st.error("⚠️ KL & Giá > 0!")
             else:
-                supabase.table("stocks").insert({"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": int(vol), "price": float(price), "note": note}).execute()
-                st.toast("✅ Đã lưu!", icon="📈")
-                clear_cache_and_rerun()
+                try:
+                    supabase.table("stocks").insert({"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": int(vol), "price": float(price), "note": note}).execute()
+                    st.success("✅ Đã lưu lệnh cổ phiếu thành công!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                except Exception as e:
+                    st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 @st.dialog("GIAO DỊCH CHỨNG CHỈ QUỸ")
 def modal_ccq():
@@ -244,7 +274,7 @@ def modal_ccq():
         with c3: val_str = st.text_input("Tổng giá trị giao dịch (VD: 5tr)")
         with c4: vol_str = st.text_input("Số lượng CCQ (VD: 100)")
         c5, c6 = st.columns(2)
-        with c5: trade_date = st.date_input("Ngày GD")
+        with c5: trade_date = st.date_input("Ngày GD", value=date.today())
         with c6: note = st.text_input("Ghi chú")
         if st.form_submit_button("💾 LƯU", use_container_width=True):
             total_val, vol = parse_smart_amount(val_str), parse_smart_amount(vol_str)
@@ -252,9 +282,13 @@ def modal_ccq():
             elif vol <= 0 or total_val <= 0: st.error("⚠️ Giá trị & SL > 0!")
             else:
                 nav = total_val / vol
-                supabase.table("ccq_funds").insert({"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).execute()
-                st.toast("✅ Đã lưu!", icon="📊")
-                clear_cache_and_rerun()
+                try:
+                    supabase.table("ccq_funds").insert({"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).execute()
+                    st.success("✅ Đã lưu giao dịch CCQ thành công!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                except Exception as e:
+                    st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 @st.dialog("🥇 GIAO DỊCH VÀNG")
 def modal_gold():
@@ -267,15 +301,19 @@ def modal_gold():
         with c3: qty_str = st.text_input("Số lượng (Chỉ)")
         with c4: price_str = st.text_input("Đơn giá (VND/Chỉ)")
         c5, c6 = st.columns(2)
-        with c5: trade_date = st.date_input("Ngày GD")
+        with c5: trade_date = st.date_input("Ngày GD", value=date.today())
         with c6: note = st.text_input("Ghi chú")
         if st.form_submit_button("💾 LƯU", use_container_width=True):
             qty, price = parse_smart_amount(qty_str), parse_smart_amount(price_str)
             if qty <= 0 or price <= 0: st.error("⚠️ SL & Giá > 0!")
             else:
-                supabase.table("gold").insert({"trade_date": str(trade_date), "gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).execute()
-                st.toast("✅ Đã lưu!", icon="🥇")
-                clear_cache_and_rerun()
+                try:
+                    supabase.table("gold").insert({"trade_date": str(trade_date), "gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).execute()
+                    st.success("✅ Đã lưu giao dịch vàng thành công!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                except Exception as e:
+                    st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 @st.dialog("THÊM KHOẢN VAY MỚI")
 def modal_debt():
@@ -286,7 +324,7 @@ def modal_debt():
         with c1: vay_str = st.text_input("Tiền vay GỐC (VD: 1.8tỷ)")
         with c2: total_months = st.number_input("Tổng tháng", min_value=1, step=1, value=180)
         c3, c4 = st.columns(2)
-        with c3: start_date = st.date_input("Ngày giải ngân")
+        with c3: start_date = st.date_input("Ngày giải ngân", value=date.today())
         with c4: payment_day = st.number_input("Ngày TT (mùng)", min_value=1, max_value=31, value=5)
         c5, c6 = st.columns(2)
         with c5: grace = st.number_input("Ân hạn gốc (tháng)", min_value=0, step=1, value=1)
@@ -295,9 +333,13 @@ def modal_debt():
             principal = parse_smart_amount(vay_str)
             if principal <= 0: st.error("⚠️ Tiền vay > 0!")
             else:
-                supabase.table("debts").insert({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "start_date": str(start_date), "interest_rate": rate, "payment_day": int(payment_day), "grace_period": int(grace)}).execute()
-                st.toast("✅ Đã lưu!", icon="🏦")
-                clear_cache_and_rerun()
+                try:
+                    supabase.table("debts").insert({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "start_date": str(start_date), "interest_rate": rate, "payment_day": int(payment_day), "grace_period": int(grace)}).execute()
+                    st.success("✅ Đã thêm khoản vay mới thành công!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                except Exception as e:
+                    st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 @st.dialog("➕ THÊM TIẾN ĐỘ BĐS")
 def modal_add_realestate():
@@ -367,9 +409,13 @@ def modal_add_realestate():
                 "note": note,
                 "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
             }
-            supabase.table("realestate").insert(payload).execute()
-            st.toast("✅ Đã thêm đợt thanh toán BĐS!", icon="🏠")
-            clear_cache_and_rerun()
+            try:
+                supabase.table("realestate").insert(payload).execute()
+                st.success("✅ Đã thêm đợt thanh toán BĐS thành công!")
+                time.sleep(1)
+                clear_cache_and_rerun()
+            except Exception as e:
+                st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 @st.dialog("➕ TẠO SỔ TIẾT KIỆM MỚI")
 def modal_add_savings():
@@ -381,15 +427,19 @@ def modal_add_savings():
         with c2: rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.1f")
         c3, c4 = st.columns(2)
         with c3: term = st.number_input("Kỳ hạn (tháng)", min_value=0, step=1)
-        with c4: deposit_date = st.date_input("Ngày gửi")
+        with c4: deposit_date = st.date_input("Ngày gửi", value=date.today())
         note = st.text_input("Ghi chú")
         if st.form_submit_button("💾 TẠO SỔ", use_container_width=True):
             amt = parse_smart_amount(amount_str)
             if amt <= 0: st.error("⚠️ Số tiền > 0!")
             else:
-                supabase.table("savings").insert({"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "note": note, "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}).execute()
-                st.toast("✅ Đã tạo sổ!", icon="💰")
-                clear_cache_and_rerun()
+                try:
+                    supabase.table("savings").insert({"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "note": note, "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}).execute()
+                    st.success("✅ Đã tạo sổ tiết kiệm thành công!")
+                    time.sleep(1)
+                    clear_cache_and_rerun()
+                except Exception as e:
+                    st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
 # --- EDIT MODALS ---
 @st.dialog("✏️ SỬA LỆNH CỔ PHIẾU")
@@ -1239,6 +1289,18 @@ with tab_realestate:
     st.markdown("<br/>", unsafe_allow_html=True)
 
     # --- REAL ESTATE ---
+    
+    # RE Due Date Alert
+    if not df_re.empty and 'status' in df_re.columns and 'due_date' in df_re.columns:
+        unpaid = df_re[df_re['status'].astype(str).str.strip() == 'Chưa thanh toán'].copy()
+        if not unpaid.empty:
+            today_date = date.today()
+            unpaid['due_date_dt'] = pd.to_datetime(unpaid['due_date'], errors='coerce').dt.date
+            upcoming = unpaid[(unpaid['due_date_dt'] >= today_date) & (unpaid['due_date_dt'] <= today_date + pd.Timedelta(days=7))]
+            for _, r in upcoming.iterrows():
+                days_left = (r['due_date_dt'] - today_date).days
+                st.warning(f"🚨 **Đến hạn thanh toán:** BĐS **{r.get('project_name','')} - {r.get('installment_name','')}** cần thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** trong **{days_left} ngày** tới!")
+
     st.subheader("🏠 Bất động sản đang sở hữu")
     df_re_f = df_re.copy()
     if not df_re_f.empty:
