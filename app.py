@@ -17,26 +17,22 @@ st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", page_icon="💰", lay
 
 # --- BẢO MẬT BẰNG MẬT KHẨU ---
 def check_password():
-    def password_entered():
-        input_pw = str(st.session_state.get("password", "")).strip()
+    if st.session_state.get("password_correct", False):
+        return True
+
+    st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔒 Đăng nhập hệ thống</h2>", unsafe_allow_html=True)
+    pw = st.text_input("Nhập mật khẩu để truy cập:", type="password")
+    
+    if pw:
+        input_pw = str(pw).strip()
         secret_pw = str(st.secrets.get("APP_PASSWORD", "123456")).strip()
         if input_pw == secret_pw:
             st.session_state["password_correct"] = True
-            if "password" in st.session_state:
-                del st.session_state["password"]
+            st.rerun()
         else:
-            st.session_state["password_correct"] = False
-
-    if "password_correct" not in st.session_state:
-        st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔒 Đăng nhập hệ thống</h2>", unsafe_allow_html=True)
-        st.text_input("Nhập mật khẩu để truy cập:", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔒 Đăng nhập hệ thống</h2>", unsafe_allow_html=True)
-        st.text_input("Nhập mật khẩu để truy cập:", type="password", on_change=password_entered, key="password")
-        st.error("😕 Mật khẩu không đúng")
-        return False
-    return True
+            st.error("😕 Mật khẩu không đúng")
+            
+    return False
 
 if not check_password():
     st.stop()
