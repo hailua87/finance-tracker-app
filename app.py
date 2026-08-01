@@ -291,10 +291,10 @@ def modal_add_realestate():
     selected_proj = st.selectbox("Chọn dự án", proj_options, key="re_proj_sel")
     
     if selected_proj == "➕ Thêm dự án mới...":
-        c1, c2 = st.columns(2)
-        with c1:
+        rc1, rc2 = st.columns(2)
+        with rc1:
             bds_name = st.text_input("Tên dự án mới", key="re_bds_name")
-        with c2:
+        with rc2:
             gia_tri_hd_str = st.text_input("Giá trị HĐ (VD: 3.5tỷ)", key="re_hd_val")
         final_project_name = bds_name.strip()
         final_contract_value = parse_smart_amount(gia_tri_hd_str)
@@ -305,21 +305,24 @@ def modal_add_realestate():
 
     st.markdown("---", unsafe_allow_html=True)
     st.markdown("### Chi tiết đợt thanh toán", unsafe_allow_html=True)
-    c1, c2 = st.columns(2)
-    with c1:
+    
+    r2_c1, r2_c2 = st.columns(2)
+    with r2_c1:
         installment_name = st.text_input("Tên đợt (VD: Đợt 1)", value="Đợt 1", key="re_inst_name")
-    with c2:
+    with r2_c2:
         amount_str = st.text_input("Số tiền thanh toán đợt này (VD: 500tr)", key="re_inst_amt")
     
-    c3, c4, c5 = st.columns(3)
-    with c3:
+    r3_c1, r3_c2 = st.columns(2)
+    with r3_c1:
         funding_source = st.selectbox("Nguồn tiền", FUNDING_SOURCES, key="re_fund_src")
-    with c4:
+    with r3_c2:
         due_date = st.date_input("Hạn thanh toán", value=date.today(), key="re_due_date")
-    with c5:
-        status = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"], key="re_status")
         
-    note = st.text_input("Ghi chú", key="re_note")
+    r4_c1, r4_c2 = st.columns(2)
+    with r4_c1:
+        status = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"], key="re_status")
+    with r4_c2:
+        note = st.text_input("Ghi chú", key="re_note")
 
     if st.button("💾 LƯU ĐỢT THANH TOÁN", use_container_width=True, type="primary", key="re_save_btn"):
         amt = parse_smart_amount(amount_str)
@@ -652,15 +655,20 @@ An toàn: &lt; 30% | Cảnh báo: 30-50% | Rủi ro: &gt; 50%
 </div>
 </div>""", unsafe_allow_html=True)
 
-    # Row 2: Header + st.columns(6)
+    # Row 2: Header + st.columns(3) in 2 clean rows to prevent truncation
     st.markdown('<div class="metric-title" style="margin-top:20px; margin-bottom:10px;">CƠ CẤU PHÂN BỔ TÀI SẢN</div>', unsafe_allow_html=True)
-    m1, m2, m3, m4, m5, m6 = st.columns(6)
-    with m1: st.metric("💵 Tiền mặt", f"{tong_tien_mat:,.0f} ₫")
-    with m2: st.metric("💰 Tiết kiệm", f"{tong_tiet_kiem:,.0f} ₫")
-    with m3: st.metric("🏠 BĐS", f"{bds_da_dong:,.0f} ₫")
-    with m4: st.metric("📊 CCQ", f"{tong_ccq:,.0f} ₫")
-    with m5: st.metric("📈 Cổ phiếu", f"{tong_cp:,.0f} ₫")
-    with m6: st.metric("🥇 Vàng", f"{tong_vang:,.0f} ₫")
+    
+    row1_m1, row1_m2, row1_m3 = st.columns(3)
+    with row1_m1: st.metric("💵 Tiền mặt", f"{tong_tien_mat:,.0f} ₫")
+    with row1_m2: st.metric("💰 Tiết kiệm", f"{tong_tiet_kiem:,.0f} ₫")
+    with row1_m3: st.metric("🏠 BĐS", f"{bds_da_dong:,.0f} ₫")
+    
+    st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
+    
+    row2_m1, row2_m2, row2_m3 = st.columns(3)
+    with row2_m1: st.metric("📊 CCQ", f"{tong_ccq:,.0f} ₫")
+    with row2_m2: st.metric("📈 Cổ phiếu", f"{tong_cp:,.0f} ₫")
+    with row2_m3: st.metric("🥇 Vàng", f"{tong_vang:,.0f} ₫")
 
     st.markdown("<br/>", unsafe_allow_html=True)
 
