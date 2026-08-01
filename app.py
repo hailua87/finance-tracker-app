@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+import calendar
 import time
 from supabase import create_client, Client
 import plotly.express as px
@@ -23,58 +24,14 @@ if "last_account" not in st.session_state:
 # 3. HALLMARK CUSTOM CSS INJECTION & MODERN UI ENHANCEMENTS
 st.markdown("""
 <style>
-    /* Nhúng font Serif mộc mạc nhưng sang trọng (Playfair Display) cho Tiêu đề */
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Inter:wght@400;500;600&display=swap');
-    
-    /* FIX LỖI ICON: Chỉ ép font Inter cho văn bản, không ghi đè cấu trúc class của Streamlit */
-    html, body, p, div, span, button, input, select, textarea, label, td, th {
-        font-family: 'Inter', sans-serif;
-    }
-    
-    /* Bảo vệ font Icon mặc định của hệ thống Streamlit để tránh hiện chữ _arrow_right_ */
-    .stIcon, span[data-baseweb="icon"], svg {
-        font-family: inherit !important;
-    }
-    
-    h1, h2, h3, .hallmark-header, .stMetricValue {
-        font-family: 'Playfair Display', serif !important;
-        letter-spacing: -0.01em;
-    }
-    
-    .hallmark-header {
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #f8fafc;
-        border-left: 6px solid #10b981;
-        padding-left: 15px;
-        margin-bottom: 15px;
-        margin-top: -25px;
-    }
-    
-    .metric-title {
-        font-size: 0.8rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: #94a3b8;
-        font-weight: 600;
-    }
-
-    /* Thu nhỏ padding tổng thể của trang để tránh cuộn chuột nhiều trên Mobile */
-    .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 1.5rem !important;
-        gap: 0.5rem !important;
-    }
-
-    /* Bo tròn góc và thêm viền xanh lá mờ cho st.metric */
-    div[data-testid="metric-container"] {
-        border-radius: 12px;
-        border: 1px solid rgba(16, 185, 129, 0.2);
-        padding: 15px;
-        background-color: rgba(16, 185, 129, 0.03); 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-
+    html, body, p, div, span, button, input, select, textarea, label, td, th { font-family: 'Inter', sans-serif; }
+    .stIcon, span[data-baseweb="icon"], svg { font-family: inherit !important; }
+    h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Playfair Display', serif !important; letter-spacing: -0.01em; }
+    .hallmark-header { font-size: 2.2rem; font-weight: 700; color: #f8fafc; border-left: 6px solid #10b981; padding-left: 15px; margin-bottom: 15px; margin-top: -25px; }
+    .metric-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; }
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; gap: 0.5rem !important; }
+    div[data-testid="metric-container"] { border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); padding: 15px; background-color: rgba(16, 185, 129, 0.03); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
     #stHeader { display: none; }
 </style>
 """, unsafe_allow_html=True)
@@ -90,11 +47,7 @@ BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS + BROKER_ACCOUNTS
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "8 Tháng", "9 Tháng", "10 Tháng", "11 Tháng", "12 Tháng", "13 Tháng", "18 Tháng", "24 Tháng", "36 Tháng"]
 
-CATS = [
-    "Lương/Thu nhập", "Ăn uống & Sinh hoạt", "Giáo dục (Con cái)", 
-    "Nhà cửa & Tiện ích", "Sức khỏe & Y tế", "Đi lại & Phương tiện", 
-    "Hiếu hỉ & Mua sắm", "Đầu tư & Trả nợ", "Khác"
-]
+CATS = ["Lương/Thu nhập", "Ăn uống & Sinh hoạt", "Giáo dục (Con cái)", "Nhà cửa & Tiện ích", "Sức khỏe & Y tế", "Đi lại & Phương tiện", "Hiếu hỉ & Mua sắm", "Đầu tư & Trả nợ", "Khác"]
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 
 # =====================================================================
@@ -115,19 +68,16 @@ def modal_cashflow():
         note = st.text_input("Ghi chú")
         
         if st.form_submit_button("LƯU GIAO DỊCH", use_container_width=True):
-            if amount <= 0:
-                st.error("⚠️ Vui lòng nhập số tiền lớn hơn 0!")
+            if amount <= 0: st.error("⚠️ Vui lòng nhập số tiền lớn hơn 0!")
             else:
                 try:
                     data = {"account": account, "amount": int(amount), "category": category, "note": note}
                     supabase.table("cashflow").insert(data).execute()
-                    
                     st.session_state.last_account = account
                     st.toast(f"✅ Đã lưu thành công {amount:,.0f} đ!", icon="🎉")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi khi lưu: {e}")
+                except Exception as e: st.error(f"Lỗi khi lưu: {e}")
 
 @st.dialog("SỬA GIAO DỊCH DÒNG TIỀN")
 def modal_edit_cashflow(row_data):
@@ -145,8 +95,7 @@ def modal_edit_cashflow(row_data):
         note = st.text_input("Ghi chú", value=row_data['note'] if row_data['note'] else "")
         
         if st.form_submit_button("CẬP NHẬT", use_container_width=True):
-            if amount <= 0:
-                st.error("⚠️ Số tiền phải lớn hơn 0!")
+            if amount <= 0: st.error("⚠️ Số tiền phải lớn hơn 0!")
             else:
                 try:
                     data = {"account": account, "amount": int(amount), "category": category, "note": note}
@@ -154,128 +103,92 @@ def modal_edit_cashflow(row_data):
                     st.toast("✅ Đã cập nhật thành công!", icon="🔄")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi: {e}")
+                except Exception as e: st.error(f"Lỗi: {e}")
 
 @st.dialog("ĐẶT LỆNH MUA / BÁN CỔ PHIẾU")
 def modal_stock():
     with st.form("invest_stock_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
-        with c1:
-            broker = st.selectbox("Nơi lưu ký (CTCK)", BROKER_ACCOUNTS + ["Khác"])
-        with c2:
-            fund_owner_stock = st.selectbox("Thuộc Portfolio", FUNDS)
+        with c1: broker = st.selectbox("Nơi lưu ký (CTCK)", BROKER_ACCOUNTS + ["Khác"])
+        with c2: fund_owner_stock = st.selectbox("Thuộc Portfolio", FUNDS)
             
         ticker = st.text_input("Mã cổ phiếu (VD: VIB, MBB, VCI...)").upper()
         action = st.radio("Lệnh", ["Mua", "Bán"], horizontal=True)
         
         c3, c4 = st.columns(2)
-        with c3:
-            volume = st.number_input("Khối lượng (CP)", min_value=1, step=100, format="%d", value=100)
-        with c4:
-            price = st.number_input("Giá khớp / Giá vốn TB (VND)", min_value=0, step=1000, format="%d")
+        with c3: volume = st.number_input("Khối lượng (CP)", min_value=1, step=100, format="%d", value=100)
+        with c4: price = st.number_input("Giá khớp / Giá vốn TB (VND)", min_value=0, step=1000, format="%d")
             
         c5, c6 = st.columns(2)
-        with c5:
-            trade_date = st.date_input("Ngày giao dịch")
-        with c6:
-            note = st.text_input("Ghi chú", placeholder="VD: Mua mới")
+        with c5: trade_date = st.date_input("Ngày giao dịch")
+        with c6: note = st.text_input("Ghi chú", placeholder="VD: Mua mới")
             
         if st.form_submit_button("LƯU LỆNH", use_container_width=True):
-            if ticker.strip() == "":
-                st.error("⚠️ Vui lòng nhập mã cổ phiếu!")
-            elif price <= 0:
-                st.error("⚠️ Giá khớp phải lớn hơn 0!")
+            if ticker.strip() == "": st.error("⚠️ Vui lòng nhập mã cổ phiếu!")
+            elif price <= 0: st.error("⚠️ Giá khớp phải lớn hơn 0!")
             else:
                 try:
-                    data = {
-                        "trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner_stock,
-                        "ticker": ticker.strip(), "action": action, "volume": int(volume),
-                        "price": float(price), "note": note
-                    }
+                    data = {"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner_stock, "ticker": ticker.strip(), "action": action, "volume": int(volume), "price": float(price), "note": note}
                     supabase.table("stocks").insert(data).execute()
                     st.toast(f"✅ Đã khớp lệnh {action} {ticker}!", icon="📈")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi khi lưu lệnh: {e}")
+                except Exception as e: st.error(f"Lỗi khi lưu lệnh: {e}")
 
 @st.dialog("GIAO DỊCH CHỨNG CHỈ QUỸ")
 def modal_ccq():
     with st.form("invest_ccq_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
-        with c1:
-            platform = st.selectbox("Nền tảng giao dịch", ["TCBS", "Fmarket", "DragonX", "VCB Digibank", "SSIAM", "SSI", "VNDirect"])
-        with c2:
-            fund_owner_ccq = st.selectbox("Thuộc Portfolio", FUNDS)
+        with c1: platform = st.selectbox("Nền tảng giao dịch", ["TCBS", "Fmarket", "DragonX", "VCB Digibank", "SSIAM", "SSI", "VNDirect"])
+        with c2: fund_owner_ccq = st.selectbox("Thuộc Portfolio", FUNDS)
             
         fund_ticker = st.text_input("Mã Quỹ (VD: DCDS, VESAF...)").upper()
         action_ccq = st.radio("Lệnh quỹ", ["Mua (SIP)", "Bán"], horizontal=True)
         
         c3, c4 = st.columns(2)
-        with c3:
-            volume_ccq = st.number_input("Số lượng CCQ", min_value=0.01, step=0.1, format="%.2f")
-        with c4:
-            nav_price = st.number_input("Giá NAV / Giá vốn TB (VND)", min_value=0, step=1000, format="%d")
+        with c3: volume_ccq = st.number_input("Số lượng CCQ", min_value=0.01, step=0.1, format="%.2f")
+        with c4: nav_price = st.number_input("Giá NAV / Giá vốn TB (VND)", min_value=0, step=1000, format="%d")
             
         c5, c6 = st.columns(2)
-        with c5:
-            trade_date = st.date_input("Ngày giao dịch")
-        with c6:
-            note = st.text_input("Ghi chú", placeholder="VD: Đầu tư SIP hàng tháng")
+        with c5: trade_date = st.date_input("Ngày giao dịch")
+        with c6: note = st.text_input("Ghi chú", placeholder="VD: Đầu tư SIP hàng tháng")
             
         if st.form_submit_button("LƯU GIAO DỊCH QUỸ", use_container_width=True):
-            if fund_ticker.strip() == "":
-                st.error("⚠️ Vui lòng nhập mã quỹ!")
+            if fund_ticker.strip() == "": st.error("⚠️ Vui lòng nhập mã quỹ!")
             else:
                 try:
-                    data = {
-                        "trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner_ccq,
-                        "ticker": fund_ticker.strip(), "action": action_ccq, "volume": float(volume_ccq),
-                        "price": float(nav_price), "note": note
-                    }
+                    data = {"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner_ccq, "ticker": fund_ticker.strip(), "action": action_ccq, "volume": float(volume_ccq), "price": float(nav_price), "note": note}
                     supabase.table("ccq_funds").insert(data).execute()
                     st.toast(f"✅ Đã lưu lệnh {fund_ticker}!", icon="📊")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi: {e}")
+                except Exception as e: st.error(f"Lỗi: {e}")
 
-# --- KHÔI PHỤC HÀM TIẾT KIỆM (FIX NAMERROR) ---
 @st.dialog("THÊM KHOẢN GỬI TIẾT KIỆM")
 def modal_savings():
     with st.form("new_deposit_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
-        with c1:
-            new_fund = st.selectbox("Chọn Portfolio", FUNDS)
-        with c2:
-            new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS)
+        with c1: new_fund = st.selectbox("Chọn Portfolio", FUNDS)
+        with c2: new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS)
             
         new_amount = st.number_input("Số tiền gốc (VND)", min_value=0, step=1000000, format="%d")
         
         c3, c4 = st.columns(2)
-        with c3:
-            new_date = st.date_input("Ngày gửi")
-        with c4:
-            new_term = st.selectbox("Kỳ hạn", TERMS)
+        with c3: new_date = st.date_input("Ngày gửi")
+        with c4: new_term = st.selectbox("Kỳ hạn", TERMS)
             
         new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f")
         
         if st.form_submit_button("LƯU KHOẢN GỬI", use_container_width=True):
-            if new_amount <= 0:
-                st.error("⚠️ Vui lòng nhập số tiền gốc hợp lệ!")
+            if new_amount <= 0: st.error("⚠️ Vui lòng nhập số tiền gốc hợp lệ!")
             else:
                 try:
-                    data = {
-                        "fund_owner": new_fund, "bank": new_bank, "deposit_date": str(new_date),
-                        "term": new_term, "interest_rate": new_rate, "amount": int(new_amount)
-                    }
+                    data = {"fund_owner": new_fund, "bank": new_bank, "deposit_date": str(new_date), "term": new_term, "interest_rate": new_rate, "amount": int(new_amount)}
                     supabase.table("savings").insert(data).execute()
                     st.toast("✅ Đã lưu sổ tiết kiệm mới!", icon="💰")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi khi lưu: {e}")
+                except Exception as e: st.error(f"Lỗi khi lưu: {e}")
 
 @st.dialog("SỬA KHOẢN GỬI TIẾT KIỆM")
 def modal_edit_savings(row_data):
@@ -292,10 +205,8 @@ def modal_edit_savings(row_data):
         
         c3, c4 = st.columns(2)
         with c3:
-            try:
-                dep_dt = pd.to_datetime(row_data['deposit_date']).date()
-            except:
-                dep_dt = date.today()
+            try: dep_dt = pd.to_datetime(row_data['deposit_date']).date()
+            except: dep_dt = date.today()
             new_date = st.date_input("Ngày gửi", value=dep_dt)
         with c4:
             idx_term = TERMS.index(row_data['term']) if row_data['term'] in TERMS else 0
@@ -304,28 +215,22 @@ def modal_edit_savings(row_data):
         new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f", value=float(row_data['interest_rate']))
         
         if st.form_submit_button("CẬP NHẬT SỔ TIẾT KIỆM", use_container_width=True):
-            if new_amount <= 0:
-                st.error("⚠️ Vui lòng nhập số tiền gốc hợp lệ!")
+            if new_amount <= 0: st.error("⚠️ Vui lòng nhập số tiền gốc hợp lệ!")
             else:
                 try:
-                    data = {
-                        "fund_owner": new_fund, "bank": new_bank, "deposit_date": str(new_date),
-                        "term": new_term, "interest_rate": new_rate, "amount": int(new_amount)
-                    }
+                    data = {"fund_owner": new_fund, "bank": new_bank, "deposit_date": str(new_date), "term": new_term, "interest_rate": new_rate, "amount": int(new_amount)}
                     supabase.table("savings").update(data).eq("id", row_data['id']).execute()
                     st.toast("✅ Đã cập nhật thành công!", icon="🔄")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi khi lưu: {e}")
+                except Exception as e: st.error(f"Lỗi khi lưu: {e}")
 
 @st.dialog("THÊM ĐỢT THANH TOÁN BĐS")
 def modal_realestate():
     try:
         res = supabase.table("realestate").select("project_name, contract_value").execute()
         existing_projects = {row['project_name']: row.get('contract_value', 0) for row in res.data} if res.data else {}
-    except:
-        existing_projects = {}
+    except: existing_projects = {}
         
     project_opts = list(existing_projects.keys()) + ["➕ Thêm dự án mới..."]
     choice = st.selectbox("Chọn Dự án / Căn hộ", project_opts)
@@ -342,71 +247,61 @@ def modal_realestate():
     dot_tt = st.text_input("Tên đợt thanh toán (VD: Đợt 4 - Cất nóc)")
     
     c1, c2 = st.columns(2)
-    with c1:
-        so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0, step=1000000, format="%d")
-    with c2:
-        nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES)
+    with c1: so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0, step=1000000, format="%d")
+    with c2: nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES)
         
     c3, c4 = st.columns(2)
-    with c3:
-        ngay_tt = st.date_input("Hạn thanh toán")
-    with c4:
-        trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
+    with c3: ngay_tt = st.date_input("Hạn thanh toán")
+    with c4: trang_thai = st.selectbox("Trạng thái", ["Chưa thanh toán", "Đã thanh toán"])
         
     ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
     
     if st.button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
-        if not bds_name.strip() or not dot_tt.strip():
-            st.error("⚠️ Vui lòng nhập tên dự án và đợt thanh toán!")
-        elif so_tien_tt <= 0:
-            st.error("⚠️ Vui lòng nhập số tiền thanh toán!")
+        if not bds_name.strip() or not dot_tt.strip(): st.error("⚠️ Vui lòng nhập tên dự án và đợt thanh toán!")
+        elif so_tien_tt <= 0: st.error("⚠️ Vui lòng nhập số tiền thanh toán!")
         else:
             try:
-                data = {
-                    "project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt,
-                    "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt),
-                    "status": trang_thai, "note": ghi_chu
-                }
+                data = {"project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt, "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt), "status": trang_thai, "note": ghi_chu}
                 supabase.table("realestate").insert(data).execute()
                 st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
+            except Exception as e: st.error(f"Lỗi: {e}")
 
-@st.dialog("THÊM KHOẢN VAY")
+@st.dialog("THÊM / CẤU HÌNH KHOẢN VAY NGÂN HÀNG")
 def modal_debt():
     with st.form("debt_form", clear_on_submit=False):
-        muc_dich = st.text_input("Mục đích vay (VD: Mua chung cư)")
+        muc_dich = st.text_input("Mục đích vay (VD: Mua chung cư Q7)")
         ngan_hang = st.selectbox("Ngân hàng cho vay", BANK_ACCOUNTS + ["Khác"])
         
+        st.markdown("**Thông số giải ngân & Thời hạn**")
         c1, c2 = st.columns(2)
-        with c1:
-            tien_vay_ban_dau = st.number_input("Tổng tiền vay BAN ĐẦU (VND)", min_value=0, step=1000000, format="%d", value=1000000000)
-        with c2:
-            tong_thoi_gian = st.number_input("Tổng thời gian (Tháng)", min_value=1, step=1, format="%d", value=180)
+        with c1: tien_vay_ban_dau = st.number_input("Tổng tiền vay GỐC (VND)", min_value=0, step=1000000, format="%d", value=1000000000)
+        with c2: tong_thoi_gian = st.number_input("Tổng thời gian vay (Tháng)", min_value=1, step=1, format="%d", value=180)
             
+        st.markdown("**Thông số thanh toán (Ân hạn & Ngày TT)**")
         c3, c4 = st.columns(2)
-        with c3:
-            ngay_giai_ngan = st.date_input("Ngày giải ngân")
-        with c4:
-            lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f", value=7.3)
+        with c3: ngay_giai_ngan = st.date_input("Ngày giải ngân (Bắt đầu tính nợ)")
+        with c4: payment_day = st.number_input("Ngày thanh toán hàng tháng", min_value=1, max_value=31, value=5, help="Ví dụ: Đóng tiền vào ngày mùng 5 hàng tháng")
+        
+        c5, c6 = st.columns(2)
+        with c5: grace_period = st.number_input("Số tháng Ân hạn gốc", min_value=0, step=1, value=1, help="Thời gian đầu chỉ trả Lãi, không trả Gốc (VD: 1 tháng, 12 tháng)")
+        with c6: lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f", value=7.3)
             
-        st.info("💡 Hệ thống tự động trừ lùi dư nợ. Chỉ sửa khi Lãi suất thay đổi hoặc Trả nợ trước hạn.")
+        st.info("💡 Hệ thống tự động xử lý thuật toán ân hạn gốc và tính dư nợ theo ngày thanh toán cố định.")
         
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
-            if tien_vay_ban_dau <= 0:
-                st.error("⚠️ Tiền vay phải lớn hơn 0!")
+            if tien_vay_ban_dau <= 0: st.error("⚠️ Tiền vay phải lớn hơn 0!")
             else:
                 try:
                     data = {
                         "purpose": muc_dich, "bank": ngan_hang, "original_principal": int(tien_vay_ban_dau),
-                        "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat
+                        "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat,
+                        "payment_day": int(payment_day), "grace_period": int(grace_period)
                     }
                     supabase.table("debts").insert(data).execute()
                     st.toast("✅ Đã ghi nhận khoản vay!", icon="🏦")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Lỗi: {e}")
+                except Exception as e: st.error(f"Lỗi Database: Hãy chắc chắn bạn đã tạo cột 'payment_day' (int8) và 'grace_period' (int8) trong bảng 'debts'. Lỗi chi tiết: {e}")
 
 @st.dialog("CẤU HÌNH SỐ DƯ GỐC BAN ĐẦU")
 def modal_opening_balance():
@@ -414,8 +309,7 @@ def modal_opening_balance():
         try:
             res = supabase.table("opening_balances").select("*").execute()
             old_data = {row['account']: row['balance'] for row in res.data} if res.data else {}
-        except:
-            old_data = {}
+        except: old_data = {}
             
         balances = {}
         tab_debit, tab_broker, tab_credit = st.tabs(["💳 Thanh toán", "📈 Chứng khoán", "💳 Tín dụng"])
@@ -459,8 +353,7 @@ def modal_opening_balance():
                 for acc, bal in balances.items():
                     supabase.table("opening_balances").upsert({"account": acc, "balance": int(bal)}, on_conflict="account").execute()
                 st.rerun()
-            except Exception as e:
-                st.error(f"Lỗi: {e}")
+            except Exception as e: st.error(f"Lỗi: {e}")
 
 # =====================================================================
 # 5. QUICK ACTION MENU (OPTIMIZED FOR MOBILE)
@@ -489,7 +382,7 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 # TAB 0: TỔNG QUAN & KHÁM SỨC KHỎE TÀI CHÍNH
 # =====================================================================
 with tab_home:
-    # --- FETCH DATA ---
+    # --- FETCH DATA TÀI SẢN ---
     try:
         res_savings = supabase.table("savings").select("amount").execute()
         tong_tiet_kiem = sum([row["amount"] for row in res_savings.data]) if res_savings.data else 0
@@ -500,23 +393,46 @@ with tab_home:
         bds_da_dong = sum([row["amount"] for row in res_re_total.data]) if res_re_total.data else 0
     except: bds_da_dong = 0
         
+    # --- TÍNH TOÁN DƯ NỢ (HỖ TRỢ ÂN HẠN & PAYMENT DAY) ---
     try:
         res_debts = supabase.table("debts").select("*").execute()
         no_khoan_vay = 0
         total_monthly_debt_payment = 0
+        
         if res_debts.data:
             df_overview_debts = pd.DataFrame(res_debts.data)
             today_dt = pd.to_datetime(date.today())
+            
             for index, row in df_overview_debts.iterrows():
                 start_dt = pd.to_datetime(row['start_date'])
-                months_passed = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
-                months_passed = max(0, min(months_passed, row['total_months']))
-                goc_co_dinh = row['original_principal'] / row['total_months']
-                du_no_thuc_te = row['original_principal'] - (goc_co_dinh * months_passed)
-                no_khoan_vay += du_no_thuc_te
+                pay_day = int(row.get('payment_day', start_dt.day))
+                grace_period = int(row.get('grace_period', 0))
+                total_months = int(row['total_months'])
+                original_principal = row['original_principal']
+                interest_rate = row['interest_rate']
                 
-                lai_thang = du_no_thuc_te * (row['interest_rate'] / 100 / 12)
-                total_monthly_debt_payment += (goc_co_dinh + lai_thang)
+                # Tính số tháng đã qua mốc thanh toán
+                months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
+                if today_dt.day < pay_day:
+                    months_diff -= 1
+                
+                months_elapsed = max(0, min(months_diff, total_months))
+                
+                # Logic Ân hạn nợ gốc
+                principal_paying_months = max(1, total_months - grace_period)
+                monthly_principal = original_principal / principal_paying_months
+                
+                months_paid_principal = max(0, months_elapsed - grace_period)
+                current_balance = original_principal - (monthly_principal * months_paid_principal)
+                
+                no_khoan_vay += current_balance
+                
+                # Tính nghĩa vụ thanh toán tháng NÀY
+                is_grace_active = (months_elapsed < grace_period)
+                current_monthly_principal = 0 if is_grace_active else monthly_principal
+                monthly_interest = current_balance * (interest_rate / 100 / 12)
+                
+                total_monthly_debt_payment += (current_monthly_principal + monthly_interest)
     except:
         no_khoan_vay = 0
         total_monthly_debt_payment = 0
@@ -577,7 +493,6 @@ with tab_home:
         runway_days = current_cash / daily_expense
         return target_ef, fund_status, dti_ratio, dti_color, runway_days
 
-    # Tiền mặt khả dụng (Giả lập = Tiết kiệm + Cổ phiếu + CCQ)
     tien_mat_kha_dung = tong_tiet_kiem + tong_cp + tong_ccq
     _, fund_status, dti_ratio, dti_color, runway = calculate_financial_health(tien_mat_kha_dung, total_monthly_debt_payment, monthly_income, monthly_expense)
 
@@ -613,19 +528,15 @@ with tab_home:
         df_trend['Net_Worth'] = df_trend['Total_Asset'] - df_trend['Total_Debt']
         
         fig = go.Figure()
-        # Lớp Nợ (San hô)
         fig.add_trace(go.Scatter(
             x=df_trend['Date'], y=df_trend['Total_Debt'], mode='lines', fill='tozeroy', 
             name='Tổng Nợ', line=dict(color='#FF7F50', width=2), fillcolor='rgba(255, 127, 80, 0.4)',
-            customdata=df_trend['Net_Worth'],
-            hovertemplate="<b>Ngày:</b> %{x|%d/%m/%Y}<br><b>Tổng Nợ:</b> %{y:,.0f} ₫<extra></extra>"
+            customdata=df_trend['Net_Worth'], hovertemplate="<b>Ngày:</b> %{x|%d/%m/%Y}<br><b>Tổng Nợ:</b> %{y:,.0f} ₫<extra></extra>"
         ))
-        # Lớp Tài sản (Teal)
         fig.add_trace(go.Scatter(
             x=df_trend['Date'], y=df_trend['Total_Asset'], mode='lines', fill='tonexty', 
             name='Tổng Tài Sản', line=dict(color='#008080', width=2), fillcolor='rgba(0, 128, 128, 0.4)',
-            customdata=df_trend['Net_Worth'],
-            hovertemplate="<b>Ngày:</b> %{x|%d/%m/%Y}<br><b>Tài Sản:</b> %{y:,.0f} ₫<br><hr><b>Tài Sản Ròng:</b> %{customdata:,.0f} ₫<extra></extra>"
+            customdata=df_trend['Net_Worth'], hovertemplate="<b>Ngày:</b> %{x|%d/%m/%Y}<br><b>Tài Sản:</b> %{y:,.0f} ₫<br><hr><b>Tài Sản Ròng:</b> %{customdata:,.0f} ₫<extra></extra>"
         ))
 
         fig.update_layout(
@@ -655,20 +566,16 @@ with tab_cashflow:
     try:
         res_all_cf = supabase.table("cashflow").select("*").execute()
         df_all = pd.DataFrame(res_all_cf.data) if res_all_cf.data else pd.DataFrame()
-    except:
-        df_all = pd.DataFrame()
+    except: df_all = pd.DataFrame()
         
     default_start = date(2026, 8, 1)
     default_end = date.today()
     
-    # Ẩn bộ lọc đa chiều vào Expander để tiết kiệm diện tích Mobile
     with st.expander("🔍 BỘ LỌC ĐA CHIỀU (DRILL-DOWN FILTER)", expanded=False):
         fc1, fc2, fc3 = st.columns([1, 1.5, 1.5])
-        
         with fc1:
             start_date = st.date_input("Từ ngày", value=default_start)
             end_date = st.date_input("Đến ngày", value=default_end)
-            
         with fc2:
             acc_groups = st.multiselect("1. Nhóm tài khoản", ["TK Thanh toán", "Thẻ tín dụng", "Tài khoản CK"], default=["TK Thanh toán", "Thẻ tín dụng", "Tài khoản CK"])
             available_accs = []
@@ -676,7 +583,6 @@ with tab_cashflow:
             if "Thẻ tín dụng" in acc_groups: available_accs.extend(CREDIT_CARDS)
             if "Tài khoản CK" in acc_groups: available_accs.extend(BROKER_ACCOUNTS)
             selected_accounts = st.multiselect("↳ Tài khoản chi tiết", available_accs, default=available_accs)
-            
         with fc3:
             cat_groups = st.multiselect("2. Nhóm dòng tiền", ["Thu nhập", "Chi tiêu"], default=["Thu nhập", "Chi tiêu"])
             available_cats_list = []
@@ -691,10 +597,8 @@ with tab_cashflow:
         df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
         df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
         df_filtered = df_filtered[df_filtered['category'].isin(selected_cats)]
-    else:
-        df_filtered = pd.DataFrame()
+    else: df_filtered = pd.DataFrame()
 
-    # Tính toán tổng hợp dòng tiền
     try:
         res_ob = supabase.table("opening_balances").select("*").execute()
         base_opening = {row['account']: row['balance'] for row in res_ob.data} if res_ob.data else {}
@@ -724,8 +628,7 @@ with tab_cashflow:
         total_thu = df_filtered[df_filtered['category'] == 'Lương/Thu nhập']['amount'].sum()
         total_chi = df_filtered[df_filtered['category'] != 'Lương/Thu nhập']['amount'].sum()
         dong_tien_thuan = total_thu - total_chi
-    else:
-        total_thu, total_chi, dong_tien_thuan = 0, 0, 0
+    else: total_thu, total_chi, dong_tien_thuan = 0, 0, 0
 
     tong_quy = (total_debit_opening + dong_tien_thuan) - total_credit_opening
 
@@ -786,35 +689,22 @@ with tab_cashflow:
         df_display['created_at_dt'] = df_display['created_at_dt'].dt.strftime('%d/%m/%Y %H:%M')
         df_display = df_display.rename(columns={'created_at_dt': 'Thời gian', 'account': 'Tài khoản', 'category': 'Phân loại', 'amount': 'Số tiền', 'note': 'Ghi chú'})
         
-        st.dataframe(
-            df_display,
-            column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")},
-            use_container_width=True, hide_index=True
-        )
+        st.dataframe(df_display, column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")}, use_container_width=True, hide_index=True)
         
         st.markdown("---")
         st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BẢNG")
-        
-        action_id = st.selectbox(
-            "Chọn giao dịch để cập nhật:", 
-            df_filtered['id'].tolist(), 
-            format_func=lambda x: f"{pd.to_datetime(df_filtered[df_filtered['id'] == x]['created_at'].values[0]).strftime('%d/%m/%Y %H:%M')} | {df_filtered[df_filtered['id'] == x]['category'].values[0]} | {df_filtered[df_filtered['id'] == x]['amount'].values[0]:,.0f} ₫",
-            key="select_cf"
-        )
-        
+        action_id = st.selectbox("Chọn giao dịch để cập nhật:", df_filtered['id'].tolist(), format_func=lambda x: f"{pd.to_datetime(df_filtered[df_filtered['id'] == x]['created_at'].values[0]).strftime('%d/%m/%Y %H:%M')} | {df_filtered[df_filtered['id'] == x]['category'].values[0]} | {df_filtered[df_filtered['id'] == x]['amount'].values[0]:,.0f} ₫", key="select_cf")
         selected_row = df_filtered[df_filtered['id'] == action_id].iloc[0]
         
         col_a1, col_a2, _ = st.columns([1.5, 1.5, 3])
         with col_a1:
-            if st.button("✏️ SỬA GIAO DỊCH NÀY", use_container_width=True, key="edit_cf"):
-                modal_edit_cashflow(selected_row)
+            if st.button("✏️ SỬA GIAO DỊCH NÀY", use_container_width=True, key="edit_cf"): modal_edit_cashflow(selected_row)
         with col_a2:
             if st.button("❌ XÓA GIAO DỊCH NÀY", use_container_width=True, key="del_cf"):
                 supabase.table("cashflow").delete().eq("id", action_id).execute()
-                st.success("Đã xóa giao dịch!")
+                st.toast("Đã xóa giao dịch!")
+                time.sleep(1)
                 st.rerun()
-    else:
-        st.info("Không có giao dịch nào phù hợp với bộ lọc hiện tại.")
 
 # =====================================================================
 # TAB 2: ĐẦU TƯ
@@ -841,11 +731,9 @@ with tab_invest:
                 for ticker, grp in df_stk.groupby('ticker'):
                     buy_rows = grp[grp['action'] == 'Mua']
                     sell_rows = grp[grp['action'] == 'Bán']
-                    
                     buy_vol = buy_rows['volume'].sum()
                     sell_vol = sell_rows['volume'].sum()
                     net_vol = buy_vol - sell_vol
-                    
                     buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
                     avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
                     total_cost = net_vol * avg_price
@@ -857,15 +745,10 @@ with tab_invest:
                 if summary_list:
                     st.dataframe(
                         pd.DataFrame(summary_list),
-                        column_config={
-                            "Khối lượng tồn": st.column_config.NumberColumn("Khối lượng tồn", format="%,.0f"),
-                            "Giá vốn TB (VND)": st.column_config.NumberColumn("Giá vốn TB (VND)", format="%,.0f ₫"),
-                            "Tổng giá vốn (VND)": st.column_config.NumberColumn("Tổng giá vốn (VND)", format="%,.0f ₫")
-                        },
+                        column_config={"Khối lượng tồn": st.column_config.NumberColumn("Khối lượng tồn", format="%,.0f"), "Giá vốn TB (VND)": st.column_config.NumberColumn("Giá vốn TB (VND)", format="%,.0f ₫"), "Tổng giá vốn (VND)": st.column_config.NumberColumn("Tổng giá vốn (VND)", format="%,.0f ₫")},
                         use_container_width=True, hide_index=True
                     )
-                else: st.info("Hiện không có cổ phiếu nào trong danh mục.")
-            else: st.info("Chưa có dữ liệu.")
+            else: st.info("Chưa có cổ phiếu nào.")
 
         with stk_sub2:
             if not df_stk.empty:
@@ -873,15 +756,15 @@ with tab_invest:
                 df_stk_display = df_stk[['id', 'Ngày', 'broker', 'fund_owner', 'ticker', 'action', 'volume', 'price', 'note']].rename(columns={
                     'broker': 'CTCK', 'fund_owner': 'Portfolio', 'ticker': 'Mã CK', 'action': 'Lệnh', 'volume': 'Khối lượng', 'price': 'Giá khớp', 'note': 'Ghi chú'
                 })
-                st.dataframe(
-                    df_stk_display,
-                    column_config={
-                        "id": None, "Khối lượng": st.column_config.NumberColumn("Khối lượng", format="%,.0f"),
-                        "Giá khớp": st.column_config.NumberColumn("Giá khớp", format="%,.0f ₫")
-                    },
-                    use_container_width=True, hide_index=True
-                )
-            else: st.info("Chưa có lịch sử lệnh nào.")
+                st.dataframe(df_stk_display, column_config={"id": None, "Khối lượng": st.column_config.NumberColumn("Khối lượng", format="%,.0f"), "Giá khớp": st.column_config.NumberColumn("Giá khớp", format="%,.0f ₫")}, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                del_stk_id = st.selectbox("Chọn ID lệnh để xóa nếu nhập sai:", df_stk['id'].tolist(), key="del_stk_id")
+                if st.button("❌ XÓA LỆNH NÀY", key="btn_del_stk"):
+                    supabase.table("stocks").delete().eq("id", del_stk_id).execute()
+                    st.toast("Đã xóa lệnh thành công!")
+                    time.sleep(1)
+                    st.rerun()
 
     with subtab_ccq:
         col_btn_ccq, _ = st.columns([1.5, 3])
@@ -902,11 +785,9 @@ with tab_invest:
                 for ticker, grp in df_fund.groupby('ticker'):
                     buy_rows = grp[grp['action'] == 'Mua']
                     sell_rows = grp[grp['action'] == 'Bán']
-                    
                     buy_vol = buy_rows['volume'].sum()
                     sell_vol = sell_rows['volume'].sum()
                     net_vol = buy_vol - sell_vol
-                    
                     buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
                     avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
                     total_cost = net_vol * avg_price
@@ -918,15 +799,10 @@ with tab_invest:
                 if fund_summary:
                     st.dataframe(
                         pd.DataFrame(fund_summary),
-                        column_config={
-                            "Số lượng tồn": st.column_config.NumberColumn("Số lượng tồn", format="%,.2f"),
-                            "Giá NAV TB (VND)": st.column_config.NumberColumn("Giá NAV TB (VND)", format="%,.0f ₫"),
-                            "Tổng giá trị (VND)": st.column_config.NumberColumn("Tổng giá trị (VND)", format="%,.0f ₫")
-                        },
+                        column_config={"Số lượng tồn": st.column_config.NumberColumn("Số lượng tồn", format="%,.2f"), "Giá NAV TB (VND)": st.column_config.NumberColumn("Giá NAV TB (VND)", format="%,.0f ₫"), "Tổng giá trị (VND)": st.column_config.NumberColumn("Tổng giá trị (VND)", format="%,.0f ₫")},
                         use_container_width=True, hide_index=True
                     )
-                else: st.info("Hiện không có chứng chỉ quỹ nào.")
-            else: st.info("Chưa có dữ liệu.")
+            else: st.info("Chưa có chứng chỉ quỹ nào.")
 
         with ccq_sub2:
             if not df_fund.empty:
@@ -934,15 +810,15 @@ with tab_invest:
                 df_fund_display = df_fund[['id', 'Ngày', 'platform', 'fund_owner', 'ticker', 'action', 'volume', 'price', 'note']].rename(columns={
                     'platform': 'Nền tảng', 'fund_owner': 'Portfolio', 'ticker': 'Mã Quỹ', 'action': 'Lệnh', 'volume': 'Số lượng', 'price': 'Giá NAV', 'note': 'Ghi chú'
                 })
-                st.dataframe(
-                    df_fund_display,
-                    column_config={
-                        "id": None, "Số lượng": st.column_config.NumberColumn("Số lượng", format="%,.2f"),
-                        "Giá NAV": st.column_config.NumberColumn("Giá NAV", format="%,.0f ₫")
-                    },
-                    use_container_width=True, hide_index=True
-                )
-            else: st.info("Chưa có lịch sử lệnh quỹ nào.")
+                st.dataframe(df_fund_display, column_config={"id": None, "Số lượng": st.column_config.NumberColumn("Số lượng", format="%,.2f"), "Giá NAV": st.column_config.NumberColumn("Giá NAV", format="%,.0f ₫")}, use_container_width=True, hide_index=True)
+                
+                st.markdown("---")
+                del_ccq_id = st.selectbox("Chọn ID lệnh để xóa nếu nhập sai:", df_fund['id'].tolist(), key="del_ccq_id")
+                if st.button("❌ XÓA LỆNH NÀY", key="btn_del_ccq"):
+                    supabase.table("ccq_funds").delete().eq("id", del_ccq_id).execute()
+                    st.toast("Đã xóa lệnh thành công!")
+                    time.sleep(1)
+                    st.rerun()
 
 # =====================================================================
 # TAB 3: TIẾT KIỆM
@@ -978,39 +854,27 @@ with tab_savings:
             
             st.dataframe(
                 df_display_sav,
-                column_config={
-                    "id": None,
-                    "Tiền gốc (VND)": st.column_config.NumberColumn("Tiền gốc (VND)", format="%,.0f ₫"), 
-                    "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất (%/năm)", format="%.2f")
-                },
+                column_config={"id": None, "Tiền gốc (VND)": st.column_config.NumberColumn("Tiền gốc (VND)", format="%,.0f ₫"), "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất (%/năm)", format="%.2f")},
                 use_container_width=True, hide_index=True
             )
             
             st.markdown(f"**⚙️ TÙY CHỈNH DỮ LIỆU SỔ TIẾT KIỆM ({fund_name.upper()})**")
-            action_id_sav = st.selectbox(
-                "Chọn sổ tiết kiệm để cập nhật:", 
-                fund_data['id'].tolist(), 
-                format_func=lambda x: f"{fund_data[fund_data['id'] == x]['bank'].values[0]} | Gốc: {fund_data[fund_data['id'] == x]['amount'].values[0]:,.0f} ₫",
-                key=f"select_sav_{fund_name}"
-            )
+            action_id_sav = st.selectbox("Chọn sổ tiết kiệm để cập nhật:", fund_data['id'].tolist(), format_func=lambda x: f"{fund_data[fund_data['id'] == x]['bank'].values[0]} | Gốc: {fund_data[fund_data['id'] == x]['amount'].values[0]:,.0f} ₫", key=f"select_sav_{fund_name}")
             
             selected_sav_row = fund_data[fund_data['id'] == action_id_sav].iloc[0]
             
             col_s1, col_s2, _ = st.columns([1.5, 1.5, 3])
             with col_s1:
-                if st.button("✏️ SỬA SỔ NÀY", use_container_width=True, key=f"edit_sav_{fund_name}"):
-                    modal_edit_savings(selected_sav_row)
+                if st.button("✏️ SỬA SỔ NÀY", use_container_width=True, key=f"edit_sav_{fund_name}"): modal_edit_savings(selected_sav_row)
             with col_s2:
                 if st.button("❌ TẤT TOÁN / XÓA SỔ NÀY", use_container_width=True, key=f"del_sav_{fund_name}"):
                     supabase.table("savings").delete().eq("id", action_id_sav).execute()
                     st.toast("Đã xóa sổ tiết kiệm!", icon="🗑️")
                     time.sleep(1)
                     st.rerun()
-        else: st.caption("Chưa có sổ tiết kiệm nào.")
-        st.divider()
 
 # =====================================================================
-# TAB 4: BĐS & TÍN DỤNG (ĐÃ ÁP DỤNG STYLER VÀ CĂN LỀ)
+# TAB 4: BĐS & TÍN DỤNG (HOÀN THIỆN LOGIC ÂN HẠN GỐC & PAYMENT DAY)
 # =====================================================================
 with tab_realestate:
     col_re_btn, col_debt_btn, _ = st.columns([1.2, 1.2, 2])
@@ -1038,70 +902,38 @@ with tab_realestate:
             contract_val = grp['contract_value'].iloc[0] if 'contract_value' in grp.columns else 0
             paid_val = grp[grp['status'] == 'Đã thanh toán']['amount'].sum()
             progress = (paid_val / contract_val * 100) if contract_val > 0 else 0
-            
             summary_re.append({"Dự án": proj, "Giá trị HĐ (VND)": contract_val, "Đã thanh toán (VND)": paid_val, "Còn lại (VND)": contract_val - paid_val, "Tiến độ (%)": progress})
             
         if summary_re:
-            st.dataframe(
-                pd.DataFrame(summary_re),
-                column_config={
-                    "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"),
-                    "Đã thanh toán (VND)": st.column_config.NumberColumn("Đã thanh toán (VND)", format="%,.0f ₫"),
-                    "Còn lại (VND)": st.column_config.NumberColumn("Còn lại (VND)", format="%,.0f ₫"),
-                    "Tiến độ (%)": st.column_config.ProgressColumn("Tiến độ (%)", format="%.1f%%", min_value=0, max_value=100)
-                },
-                use_container_width=True, hide_index=True
-            )
+            st.dataframe(pd.DataFrame(summary_re), column_config={"Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"), "Đã thanh toán (VND)": st.column_config.NumberColumn("Đã thanh toán (VND)", format="%,.0f ₫"), "Còn lại (VND)": st.column_config.NumberColumn("Còn lại (VND)", format="%,.0f ₫"), "Tiến độ (%)": st.column_config.ProgressColumn("Tiến độ (%)", format="%.1f%%", min_value=0, max_value=100)}, use_container_width=True, hide_index=True)
             
         st.markdown("##### 📄 Chi tiết các đợt thanh toán")
         if "funding_source" not in df_re.columns: df_re["funding_source"] = "N/A"
         if "note" not in df_re.columns: df_re["note"] = ""
             
-        df_re_display = df_re[['id', 'project_name', 'installment_name', 'contract_value', 'amount', 'funding_source', 'due_date', 'status', 'note']].rename(
-            columns={'project_name': 'Dự án', 'installment_name': 'Tên Đợt', 'contract_value': 'Giá trị HĐ (VND)', 'amount': 'Thanh toán (VND)', 'funding_source': 'Nguồn tiền', 'due_date': 'Hạn TT', 'status': 'Trạng thái', 'note': 'Ghi chú'}
-        )
+        df_re_display = df_re[['id', 'project_name', 'installment_name', 'contract_value', 'amount', 'funding_source', 'due_date', 'status', 'note']].rename(columns={'project_name': 'Dự án', 'installment_name': 'Tên Đợt', 'contract_value': 'Giá trị HĐ (VND)', 'amount': 'Thanh toán (VND)', 'funding_source': 'Nguồn tiền', 'due_date': 'Hạn TT', 'status': 'Trạng thái', 'note': 'Ghi chú'})
         
-        # Áp dụng màu sắc cho trạng thái thanh toán BĐS
         def style_bds(row):
             if row['Trạng thái'] == 'Đã thanh toán': return ['background-color: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 500'] * len(row)
             else: return ['background-color: rgba(239, 68, 68, 0.1); color: #f87171'] * len(row)
                 
-        st.dataframe(
-            df_re_display.style.apply(style_bds, axis=1),
-            column_config={
-                "id": None, 
-                "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"),
-                "Thanh toán (VND)": st.column_config.NumberColumn("Thanh toán (VND)", format="%,.0f ₫")
-            },
-            use_container_width=True, hide_index=True
-        )
+        st.dataframe(df_re_display.style.apply(style_bds, axis=1), column_config={"id": None, "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"), "Thanh toán (VND)": st.column_config.NumberColumn("Thanh toán (VND)", format="%,.0f ₫")}, use_container_width=True, hide_index=True)
         
         st.markdown("---")
-        st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BĐS")
-        action_id_re = st.selectbox(
-            "Chọn tiến độ BĐS để cập nhật:", 
-            df_re['id'].tolist(), 
-            format_func=lambda x: f"{df_re[df_re['id'] == x]['project_name'].values[0]} | {df_re[df_re['id'] == x]['installment_name'].values[0]} | {df_re[df_re['id'] == x]['amount'].values[0]:,.0f} ₫",
-            key="select_re"
-        )
-        
+        action_id_re = st.selectbox("Chọn tiến độ BĐS để cập nhật:", df_re['id'].tolist(), format_func=lambda x: f"{df_re[df_re['id'] == x]['project_name'].values[0]} | {df_re[df_re['id'] == x]['installment_name'].values[0]} | {df_re[df_re['id'] == x]['amount'].values[0]:,.0f} ₫", key="select_re")
         selected_re_row = df_re[df_re['id'] == action_id_re].iloc[0]
         
         col_re1, col_re2, _ = st.columns([1.5, 1.5, 3])
         with col_re1:
-            if st.button("✏️ SỬA TIẾN ĐỘ NÀY", use_container_width=True, key="edit_re"):
-                modal_edit_realestate(selected_re_row)
+            if st.button("✏️ SỬA TIẾN ĐỘ NÀY", use_container_width=True, key="edit_re"): modal_edit_realestate(selected_re_row)
         with col_re2:
             if st.button("❌ XÓA TIẾN ĐỘ NÀY", use_container_width=True, key="del_re"):
                 supabase.table("realestate").delete().eq("id", action_id_re).execute()
                 st.toast("Đã xóa BĐS!", icon="🗑️")
                 time.sleep(1)
                 st.rerun()
-    else: st.info("Dữ liệu tiến độ BĐS hiện đang trống.")
-    
-    st.divider()
-    
-    # --- KHOẢN VAY ---
+
+    # --- KHOẢN VAY (THUẬT TOÁN ÂN HẠN GỐC & NGÀY THANH TOÁN) ---
     st.subheader("Khoản vay tín dụng & Dư nợ")
     
     try:
@@ -1111,68 +943,90 @@ with tab_realestate:
 
     if not df_vay.empty and "original_principal" in df_vay.columns:
         today = pd.to_datetime(date.today())
-        df_vay['start_date'] = pd.to_datetime(df_vay['start_date'])
         
-        df_vay['Tháng đã trả'] = (today.year - df_vay['start_date'].dt.year) * 12 + (today.month - df_vay['start_date'].dt.month)
-        df_vay['Tháng đã trả'] = df_vay.apply(lambda x: max(0, min(x['Tháng đã trả'], x['total_months'])), axis=1)
+        def calculate_loan_schedule(row):
+            start_date = pd.to_datetime(row['start_date'])
+            payment_day = int(row.get('payment_day', start_date.day))
+            grace_period = int(row.get('grace_period', 0))
+            total_months = int(row['total_months'])
+            original_principal = row['original_principal']
+            interest_rate = row['interest_rate']
+
+            # Tính số tháng đã qua mốc thanh toán
+            months_diff = (today.year - start_date.year) * 12 + (today.month - start_date.month)
+            if today.day < payment_day:
+                months_diff -= 1 # Chưa tới ngày thanh toán của tháng này
+                
+            months_elapsed = max(0, min(months_diff, total_months))
+
+            # Logic Ân hạn nợ gốc
+            principal_paying_months = max(1, total_months - grace_period)
+            monthly_principal = original_principal / principal_paying_months
+            
+            months_paid_principal = max(0, months_elapsed - grace_period)
+            current_balance = original_principal - (monthly_principal * months_paid_principal)
+            
+            # Tính toán kỳ thanh toán tiếp theo
+            is_grace_active = (months_elapsed < grace_period)
+            current_monthly_principal = 0 if is_grace_active else monthly_principal
+            monthly_interest = current_balance * (interest_rate / 100 / 12)
+            total_payment = current_monthly_principal + monthly_interest
+
+            # Xác định Ngày thanh toán kế tiếp
+            next_month = today.month if today.day <= payment_day else today.month + 1
+            next_year = today.year
+            if next_month > 12:
+                next_month = 1
+                next_year += 1
+            
+            try:
+                next_payment_date = pd.Timestamp(year=next_year, month=next_month, day=payment_day)
+            except ValueError: # Xử lý các tháng thiếu ngày (VD: tháng 2 không có ngày 30)
+                last_day = calendar.monthrange(next_year, next_month)[1]
+                next_payment_date = pd.Timestamp(year=next_year, month=next_month, day=min(payment_day, last_day))
+
+            return pd.Series({
+                'Kỳ TT kế tiếp': next_payment_date.strftime('%d/%m/%Y'),
+                'Tổng kỳ hạn': total_months,
+                'Ân hạn': f"{grace_period}T" if grace_period > 0 else "0",
+                'Tháng đã qua': months_elapsed,
+                'Vay ban đầu': original_principal,
+                'Dư nợ HIỆN TẠI': current_balance,
+                'Đã trả (Gốc)': original_principal - current_balance,
+                'Tiến độ (%)': ((original_principal - current_balance) / original_principal) * 100,
+                'Lãi suất (%/năm)': interest_rate,
+                'Gốc/Tháng': current_monthly_principal,
+                'Lãi/Tháng': monthly_interest,
+                'Tổng phải trả': total_payment
+            })
+
+        # Áp dụng thuật toán cho từng khoản vay
+        loan_metrics = df_vay.apply(calculate_loan_schedule, axis=1)
+        df_display_vay = pd.concat([df_vay[['id', 'purpose', 'bank']].rename(columns={'purpose': 'Mục đích', 'bank': 'Ngân hàng'}), loan_metrics], axis=1)
         
-        df_vay["Gốc cố định/Tháng"] = df_vay["original_principal"] / df_vay["total_months"]
-        df_vay["Dư nợ HIỆN TẠI"] = df_vay["original_principal"] - (df_vay["Gốc cố định/Tháng"] * df_vay["Tháng đã trả"])
-        df_vay["Lãi tháng này"] = df_vay["Dư nợ HIỆN TẠI"] * (df_vay["interest_rate"] / 100 / 12)
-        df_vay["Tổng phải trả (Tháng này)"] = df_vay["Gốc cố định/Tháng"] + df_vay["Lãi tháng này"]
-        df_vay["Đã trả (Gốc)"] = df_vay["original_principal"] - df_vay["Dư nợ HIỆN TẠI"]
-        df_vay["Tiến độ (%)"] = (df_vay["Đã trả (Gốc)"] / df_vay["original_principal"]) * 100
+        cols_to_show = ['id', 'Mục đích', 'Ngân hàng', 'Kỳ TT kế tiếp', 'Tổng kỳ hạn', 'Ân hạn', 'Tháng đã qua', 'Lãi suất (%/năm)', 'Vay ban đầu', 'Đã trả (Gốc)', 'Dư nợ HIỆN TẠI', 'Tiến độ (%)', 'Gốc/Tháng', 'Lãi/Tháng', 'Tổng phải trả']
         
-        df_display_vay = df_vay.rename(columns={
-            "purpose": "Mục đích", "bank": "Ngân hàng", "total_months": "Tổng kỳ hạn",
-            "original_principal": "Vay ban đầu", "interest_rate": "Lãi suất (%/năm)"
-        })
-        
-        cols_to_show = ['id', 'Mục đích', 'Ngân hàng', 'Tổng kỳ hạn', 'Tháng đã trả', 'Dư nợ HIỆN TẠI', 'Lãi suất (%/năm)', 'Vay ban đầu', 'Đã trả (Gốc)', 'Tiến độ (%)', 'Gốc cố định/Tháng', 'Lãi tháng này', 'Tổng phải trả (Tháng này)']
-        
-        # Áp dụng màu sắc cho nợ đã tất toán
         def style_debt(row):
             if row['Dư nợ HIỆN TẠI'] <= 0: return ['background-color: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 500'] * len(row)
+            if row['Ân hạn'] != "0": return ['background-color: rgba(245, 158, 11, 0.1)'] * len(row) # Highlight nhẹ các khoản đang ân hạn
             return [''] * len(row)
             
         st.dataframe(
             df_display_vay[cols_to_show].style.apply(style_debt, axis=1),
             column_config={
-                "id": None,
-                "Tổng kỳ hạn": st.column_config.NumberColumn("Tổng kỳ hạn", format="%d Tháng"),
-                "Tháng đã trả": st.column_config.NumberColumn("Đã trả", format="%d Tháng"),
-                "Vay ban đầu": st.column_config.NumberColumn("Vay ban đầu", format="%,.0f ₫"),
-                "Đã trả (Gốc)": st.column_config.NumberColumn("Đã trả (Gốc)", format="%,.0f ₫"),
-                "Dư nợ HIỆN TẠI": st.column_config.NumberColumn("Dư nợ HIỆN TẠI", format="%,.0f ₫"),
-                "Gốc cố định/Tháng": st.column_config.NumberColumn("Gốc/Tháng", format="%,.0f ₫"),
-                "Lãi tháng này": st.column_config.NumberColumn("Lãi tháng", format="%,.0f ₫"),
-                "Tổng phải trả (Tháng này)": st.column_config.NumberColumn("Tổng TT (Tháng)", format="%,.0f ₫"),
-                "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất", format="%.2f%%"),
-                "Tiến độ (%)": st.column_config.ProgressColumn("Tiến độ (%)", format="%.1f%%", min_value=0, max_value=100)
+                "id": None, "Tổng kỳ hạn": st.column_config.NumberColumn("Tổng kỳ hạn", format="%d Tháng"), "Tháng đã qua": st.column_config.NumberColumn("Đã qua", format="%d Tháng"),
+                "Vay ban đầu": st.column_config.NumberColumn("Vay ban đầu", format="%,.0f ₫"), "Đã trả (Gốc)": st.column_config.NumberColumn("Đã trả (Gốc)", format="%,.0f ₫"),
+                "Dư nợ HIỆN TẠI": st.column_config.NumberColumn("Dư nợ HIỆN TẠI", format="%,.0f ₫"), "Gốc/Tháng": st.column_config.NumberColumn("Gốc/Tháng", format="%,.0f ₫"),
+                "Lãi/Tháng": st.column_config.NumberColumn("Lãi/Tháng", format="%,.0f ₫"), "Tổng phải trả": st.column_config.NumberColumn("Tổng TT (Tháng)", format="%,.0f ₫"),
+                "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất", format="%.2f%%"), "Tiến độ (%)": st.column_config.ProgressColumn("Tiến độ (%)", format="%.1f%%", min_value=0, max_value=100)
             },
             use_container_width=True, hide_index=True
         )
         
         st.markdown("---")
-        st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU KHOẢN VAY")
-        action_id_debt = st.selectbox(
-            "Chọn khoản vay để cập nhật:", 
-            df_vay['id'].tolist(), 
-            format_func=lambda x: f"{df_vay[df_vay['id'] == x]['purpose'].values[0]} | {df_vay[df_vay['id'] == x]['bank'].values[0]} | Dư nợ: {df_vay[df_vay['id'] == x]['Dư nợ HIỆN TẠI'].values[0]:,.0f} ₫",
-            key="select_debt"
-        )
-        
-        selected_debt_row = df_vay[df_vay['id'] == action_id_debt].iloc[0]
-        
-        col_d1, col_d2, _ = st.columns([1.5, 1.5, 3])
-        with col_d1:
-            if st.button("✏️ SỬA KHOẢN VAY NÀY", use_container_width=True, key="edit_debt"):
-                modal_edit_debt(selected_debt_row)
-        with col_d2:
-            if st.button("❌ XÓA KHOẢN VAY NÀY", use_container_width=True, key="del_debt"):
-                supabase.table("debts").delete().eq("id", action_id_debt).execute()
-                st.toast("Đã xóa khoản vay!", icon="🗑️")
-                time.sleep(1)
-                st.rerun()
-
-    else: st.info("Dữ liệu dư nợ hiện đang trống.")
+        action_id_debt = st.selectbox("Chọn khoản vay để xóa:", df_vay['id'].tolist(), format_func=lambda x: f"{df_vay[df_vay['id'] == x]['purpose'].values[0]} | {df_vay[df_vay['id'] == x]['bank'].values[0]}", key="select_debt")
+        if st.button("❌ XÓA KHOẢN VAY NÀY", key="del_debt"):
+            supabase.table("debts").delete().eq("id", action_id_debt).execute()
+            st.toast("Đã xóa khoản vay!", icon="🗑️")
+            time.sleep(1)
+            st.rerun()
