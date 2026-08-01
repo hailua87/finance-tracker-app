@@ -8,8 +8,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# 1. THIẾT LẬP CẤU HÌNH & KẾT NỐI SUPABASE
-st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", layout="wide", initial_sidebar_state="collapsed")
+# 1. THIẾT LẬP CẤU HÌNH & KẾT NỐI SUPABASE (TỐI ƯU ICON CHO APP MOBILE)
+st.set_page_config(
+    page_title="Nhà Quê Tập Chi Tiêu", 
+    page_icon="💰", 
+    layout="wide", 
+    initial_sidebar_state="collapsed"
+)
 
 @st.cache_resource
 def init_supabase():
@@ -24,14 +29,58 @@ if "last_account" not in st.session_state:
 # 3. HALLMARK CUSTOM CSS INJECTION & MODERN UI ENHANCEMENTS
 st.markdown("""
 <style>
+    /* Nhúng font Serif mộc mạc nhưng sang trọng (Playfair Display) cho Tiêu đề */
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Inter:wght@400;500;600&display=swap');
-    html, body, p, div, span, button, input, select, textarea, label, td, th { font-family: 'Inter', sans-serif; }
-    .stIcon, span[data-baseweb="icon"], svg { font-family: inherit !important; }
-    h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Playfair Display', serif !important; letter-spacing: -0.01em; }
-    .hallmark-header { font-size: 2.2rem; font-weight: 700; color: #f8fafc; border-left: 6px solid #10b981; padding-left: 15px; margin-bottom: 15px; margin-top: -25px; }
-    .metric-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; }
-    .block-container { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; gap: 0.5rem !important; }
-    div[data-testid="metric-container"] { border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); padding: 15px; background-color: rgba(16, 185, 129, 0.03); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    
+    /* CHỈ ÉP FONT INTER CHO VĂN BẢN (BẢO VỆ FONT ICON HỆ THỐNG STREAMLIT) */
+    html, body, p, div, span, button, input, select, textarea, label, td, th { 
+        font-family: 'Inter', sans-serif; 
+    }
+    
+    /* Fix triệt để lỗi hiện chữ _arrow_right_ ở bộ lọc expander */
+    .stIcon, span[data-baseweb="icon"], svg { 
+        font-family: inherit !important; 
+    }
+    
+    h1, h2, h3, .hallmark-header, .stMetricValue { 
+        font-family: 'Playfair Display', serif !important; 
+        letter-spacing: -0.01em; 
+    }
+    
+    .hallmark-header { 
+        font-size: 2.2rem; 
+        font-weight: 700; 
+        color: #f8fafc; 
+        border-left: 6px solid #10b981; 
+        padding-left: 15px; 
+        margin-bottom: 15px; 
+        margin-top: -25px; 
+    }
+    
+    .metric-title { 
+        font-size: 0.8rem; 
+        text-transform: uppercase; 
+        letter-spacing: 0.05em; 
+        color: #94a3b8; 
+        font-weight: 600; 
+    }
+    
+    /* Thu nhỏ padding tổng thể trang để tối ưu cho Mobile */
+    .block-container { 
+        padding-top: 1.5rem !important; 
+        padding-bottom: 1.5rem !important; 
+        gap: 0.5rem !important; 
+    }
+    
+    /* Bo tròn góc và viền xanh lá mờ cho st.metric */
+    div[data-testid="metric-container"] { 
+        border-radius: 12px; 
+        border: 1px solid rgba(16, 185, 129, 0.2); 
+        padding: 15px; 
+        background-color: rgba(16, 185, 129, 0.03); 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+    }
+    
     #stHeader { display: none; }
 </style>
 """, unsafe_allow_html=True)
@@ -51,7 +100,7 @@ CATS = ["Lương/Thu nhập", "Ăn uống & Sinh hoạt", "Giáo dục (Con cái
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 
 # =====================================================================
-# 4. KHO MODAL (@st.dialog) - SMART FORMS
+# 4. KHO MODAL (@st.dialog) - SMART FORMS & VALIDATION
 # =====================================================================
 
 @st.dialog("💸 GHI NHẬN DÒNG TIỀN")
@@ -86,10 +135,8 @@ def modal_edit_cashflow(row_data):
         idx_cat = CATS.index(row_data['category']) if row_data['category'] in CATS else 0
         
         c1, c2 = st.columns(2)
-        with c1:
-            account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS, index=idx_acc)
-        with c2:
-            category = st.selectbox("Phân loại", CATS, index=idx_cat)
+        with c1: account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS, index=idx_acc)
+        with c2: category = st.selectbox("Phân loại", CATS, index=idx_cat)
             
         amount = st.number_input("Số tiền (VND)", min_value=0, step=10000, format="%d", value=int(row_data['amount']))
         note = st.text_input("Ghi chú", value=row_data['note'] if row_data['note'] else "")
@@ -301,7 +348,7 @@ def modal_debt():
                     st.toast("✅ Đã ghi nhận khoản vay!", icon="🏦")
                     time.sleep(1.5)
                     st.rerun()
-                except Exception as e: st.error(f"Lỗi Database: Hãy chắc chắn bạn đã tạo cột 'payment_day' (int8) và 'grace_period' (int8) trong bảng 'debts'. Lỗi chi tiết: {e}")
+                except Exception as e: st.error(f"Lỗi: {e}")
 
 @st.dialog("CẤU HÌNH SỐ DƯ GỐC BAN ĐẦU")
 def modal_opening_balance():
@@ -382,7 +429,6 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 # TAB 0: TỔNG QUAN & KHÁM SỨC KHỎE TÀI CHÍNH
 # =====================================================================
 with tab_home:
-    # --- FETCH DATA TÀI SẢN ---
     try:
         res_savings = supabase.table("savings").select("amount").execute()
         tong_tiet_kiem = sum([row["amount"] for row in res_savings.data]) if res_savings.data else 0
@@ -393,7 +439,7 @@ with tab_home:
         bds_da_dong = sum([row["amount"] for row in res_re_total.data]) if res_re_total.data else 0
     except: bds_da_dong = 0
         
-    # --- TÍNH TOÁN DƯ NỢ (HỖ TRỢ ÂN HẠN & PAYMENT DAY) ---
+    # --- TÍNH TOÁN DƯ NỢ (ÂN HẠN & PAYMENT DAY) ---
     try:
         res_debts = supabase.table("debts").select("*").execute()
         no_khoan_vay = 0
@@ -411,27 +457,20 @@ with tab_home:
                 original_principal = row['original_principal']
                 interest_rate = row['interest_rate']
                 
-                # Tính số tháng đã qua mốc thanh toán
                 months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
-                if today_dt.day < pay_day:
-                    months_diff -= 1
+                if today_dt.day < pay_day: months_diff -= 1
                 
                 months_elapsed = max(0, min(months_diff, total_months))
-                
-                # Logic Ân hạn nợ gốc
                 principal_paying_months = max(1, total_months - grace_period)
                 monthly_principal = original_principal / principal_paying_months
                 
                 months_paid_principal = max(0, months_elapsed - grace_period)
                 current_balance = original_principal - (monthly_principal * months_paid_principal)
-                
                 no_khoan_vay += current_balance
                 
-                # Tính nghĩa vụ thanh toán tháng NÀY
                 is_grace_active = (months_elapsed < grace_period)
                 current_monthly_principal = 0 if is_grace_active else monthly_principal
                 monthly_interest = current_balance * (interest_rate / 100 / 12)
-                
                 total_monthly_debt_payment += (current_monthly_principal + monthly_interest)
     except:
         no_khoan_vay = 0
@@ -478,10 +517,8 @@ with tab_home:
             monthly_expense = df_cf[df_cf['category'] != 'Lương/Thu nhập'].groupby('month_year')['amount'].sum().mean()
             if pd.isna(monthly_income): monthly_income = 1
             if pd.isna(monthly_expense): monthly_expense = 1
-        else:
-            monthly_income, monthly_expense = 1, 1
-    except:
-        monthly_income, monthly_expense = 1, 1
+        else: monthly_income, monthly_expense = 1, 1
+    except: monthly_income, monthly_expense = 1, 1
 
     # --- TÍNH TOÁN HEALTH METRICS ---
     def calculate_financial_health(current_cash, debt_payment, avg_income, avg_expense):
@@ -874,7 +911,7 @@ with tab_savings:
                     st.rerun()
 
 # =====================================================================
-# TAB 4: BĐS & TÍN DỤNG (HOÀN THIỆN LOGIC ÂN HẠN GỐC & PAYMENT DAY)
+# TAB 4: BĐS & TÍN DỤNG (THUẬT TOÁN ÂN HẠN GỐC & NGÀY THANH TOÁN)
 # =====================================================================
 with tab_realestate:
     col_re_btn, col_debt_btn, _ = st.columns([1.2, 1.2, 2])
@@ -920,20 +957,15 @@ with tab_realestate:
         st.dataframe(df_re_display.style.apply(style_bds, axis=1), column_config={"id": None, "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"), "Thanh toán (VND)": st.column_config.NumberColumn("Thanh toán (VND)", format="%,.0f ₫")}, use_container_width=True, hide_index=True)
         
         st.markdown("---")
-        action_id_re = st.selectbox("Chọn tiến độ BĐS để cập nhật:", df_re['id'].tolist(), format_func=lambda x: f"{df_re[df_re['id'] == x]['project_name'].values[0]} | {df_re[df_re['id'] == x]['installment_name'].values[0]} | {df_re[df_re['id'] == x]['amount'].values[0]:,.0f} ₫", key="select_re")
-        selected_re_row = df_re[df_re['id'] == action_id_re].iloc[0]
+        action_id_re = st.selectbox("Chọn tiến độ BĐS để xóa:", df_re['id'].tolist(), format_func=lambda x: f"{df_re[df_re['id'] == x]['project_name'].values[0]} | {df_re[df_re['id'] == x]['installment_name'].values[0]} | {df_re[df_re['id'] == x]['amount'].values[0]:,.0f} ₫", key="select_re")
         
-        col_re1, col_re2, _ = st.columns([1.5, 1.5, 3])
-        with col_re1:
-            if st.button("✏️ SỬA TIẾN ĐỘ NÀY", use_container_width=True, key="edit_re"): modal_edit_realestate(selected_re_row)
-        with col_re2:
-            if st.button("❌ XÓA TIẾN ĐỘ NÀY", use_container_width=True, key="del_re"):
-                supabase.table("realestate").delete().eq("id", action_id_re).execute()
-                st.toast("Đã xóa BĐS!", icon="🗑️")
-                time.sleep(1)
-                st.rerun()
+        if st.button("❌ XÓA TIẾN ĐỘ NÀY", key="del_re"):
+            supabase.table("realestate").delete().eq("id", action_id_re).execute()
+            st.toast("Đã xóa BĐS!", icon="🗑️")
+            time.sleep(1)
+            st.rerun()
 
-    # --- KHOẢN VAY (THUẬT TOÁN ÂN HẠN GỐC & NGÀY THANH TOÁN) ---
+    # --- KHOẢN VAY (THUẬT TOÁN ÂN HẠN GỐC & NGÀY THANH TOÁN CỐ ĐỊNH) ---
     st.subheader("Khoản vay tín dụng & Dư nợ")
     
     try:
@@ -952,27 +984,22 @@ with tab_realestate:
             original_principal = row['original_principal']
             interest_rate = row['interest_rate']
 
-            # Tính số tháng đã qua mốc thanh toán
             months_diff = (today.year - start_date.year) * 12 + (today.month - start_date.month)
-            if today.day < payment_day:
-                months_diff -= 1 # Chưa tới ngày thanh toán của tháng này
+            if today.day < payment_day: months_diff -= 1
                 
             months_elapsed = max(0, min(months_diff, total_months))
 
-            # Logic Ân hạn nợ gốc
             principal_paying_months = max(1, total_months - grace_period)
             monthly_principal = original_principal / principal_paying_months
             
             months_paid_principal = max(0, months_elapsed - grace_period)
             current_balance = original_principal - (monthly_principal * months_paid_principal)
             
-            # Tính toán kỳ thanh toán tiếp theo
             is_grace_active = (months_elapsed < grace_period)
             current_monthly_principal = 0 if is_grace_active else monthly_principal
             monthly_interest = current_balance * (interest_rate / 100 / 12)
             total_payment = current_monthly_principal + monthly_interest
 
-            # Xác định Ngày thanh toán kế tiếp
             next_month = today.month if today.day <= payment_day else today.month + 1
             next_year = today.year
             if next_month > 12:
@@ -981,7 +1008,7 @@ with tab_realestate:
             
             try:
                 next_payment_date = pd.Timestamp(year=next_year, month=next_month, day=payment_day)
-            except ValueError: # Xử lý các tháng thiếu ngày (VD: tháng 2 không có ngày 30)
+            except ValueError:
                 last_day = calendar.monthrange(next_year, next_month)[1]
                 next_payment_date = pd.Timestamp(year=next_year, month=next_month, day=min(payment_day, last_day))
 
@@ -1000,7 +1027,6 @@ with tab_realestate:
                 'Tổng phải trả': total_payment
             })
 
-        # Áp dụng thuật toán cho từng khoản vay
         loan_metrics = df_vay.apply(calculate_loan_schedule, axis=1)
         df_display_vay = pd.concat([df_vay[['id', 'purpose', 'bank']].rename(columns={'purpose': 'Mục đích', 'bank': 'Ngân hàng'}), loan_metrics], axis=1)
         
@@ -1008,7 +1034,7 @@ with tab_realestate:
         
         def style_debt(row):
             if row['Dư nợ HIỆN TẠI'] <= 0: return ['background-color: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 500'] * len(row)
-            if row['Ân hạn'] != "0": return ['background-color: rgba(245, 158, 11, 0.1)'] * len(row) # Highlight nhẹ các khoản đang ân hạn
+            if row['Ân hạn'] != "0": return ['background-color: rgba(245, 158, 11, 0.1)'] * len(row)
             return [''] * len(row)
             
         st.dataframe(
