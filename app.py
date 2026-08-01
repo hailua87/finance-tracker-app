@@ -1301,7 +1301,7 @@ with tab_savings:
                     </div>
                     ''', unsafe_allow_html=True)
                 safe_key = fund_name.replace(" ", "_")
-                options_sv = [f"#{r.get('id','')} | {safe_float(r.get('amount')):,.0f}₫ | LS:{r.get('interest_rate',0)}% | {r.get('term',0)}th" for _, r in fund_df.iterrows()]
+                options_sv = [f"#{r.get('id','')} | {safe_float(r.get('amount')):,.0f}₫ | LS:{r.get('interest_rate',0)}% | {safe_float(str(r.get('term',0)).replace(' Tháng', '').replace(' tháng', '')):.0f} Tháng" for _, r in fund_df.iterrows()]
                 sel_sv = st.selectbox("Chọn sổ tiết kiệm", range(len(options_sv)), format_func=lambda i: options_sv[i], key=f"sel_sv_{safe_key}")
                 sv_e1, sv_e2 = st.columns(2)
                 with sv_e1:
