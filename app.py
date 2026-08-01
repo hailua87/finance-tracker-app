@@ -99,6 +99,18 @@ def safe_float(val):
 def filter_by_member(df, member, col='fund_owner'):
     if member == "Tất cả" or df.empty or col not in df.columns:
         return df
+    if col == 'fund_owner':
+        valid_funds = [f for f, m in FUND_MEMBER_MAP.items() if m == member]
+        if valid_funds:
+            return df[df[col].isin(valid_funds)]
+        return pd.DataFrame(columns=df.columns)
+    elif col == 'account':
+        if member == "Daddy":
+            return df[df[col].astype(str).str.contains("chồng|Daddy", case=False, na=False)]
+        elif member == "Mommy":
+            return df[df[col].astype(str).str.contains("vợ|Mommy", case=False, na=False)]
+        elif member == "Baby":
+            return df[df[col].astype(str).str.contains("baby|con", case=False, na=False)]
     return df[df[col].astype(str).str.contains(member, na=False, case=False)]
 
 def fund_matches_member(fund_name, member):
@@ -106,6 +118,7 @@ def fund_matches_member(fund_name, member):
         return True
     return FUND_MEMBER_MAP.get(fund_name, "") == member
 
+@st.cache_data(ttl=60, show_spinner=False)
 def fetch_table(name):
     try:
         res = supabase.table(name).select("*").execute()
@@ -116,6 +129,11 @@ def fetch_table(name):
         return df
     except Exception:
         return pd.DataFrame()
+
+def clear_cache_and_rerun():
+    fetch_table.clear()
+    time.sleep(1)
+    st.rerun()
 
 def calc_investment_total(df, group_col, vol_col='volume'):
     if df.empty or group_col not in df.columns:
@@ -188,7 +206,8 @@ def modal_cashflow():
             supabase.table("cashflow").insert({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).execute()
             st.session_state.last_account = account
             st.session_state.cf_amount_str = ""
-            st.toast("✅ Đã lưu!", icon="🔥"); time.sleep(1); st.rerun()
+            st.toast("✅ Đã lưu!", icon="🔥")
+            clear_cache_and_rerun()
 
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
@@ -210,7 +229,8 @@ def modal_stock():
             elif vol <= 0 or price <= 0: st.error("⚠️ KL & Giá > 0!")
             else:
                 supabase.table("stocks").insert({"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": int(vol), "price": float(price), "note": note}).execute()
-                st.toast("✅ Đã lưu!", icon="📈"); time.sleep(1); st.rerun()
+                st.toast("✅ Đã lưu!", icon="📈")
+                clear_cache_and_rerun()
 
 @st.dialog("GIAO DỊCH CHỨNG CHỈ QUỸ")
 def modal_ccq():
@@ -233,7 +253,8 @@ def modal_ccq():
             else:
                 nav = total_val / vol
                 supabase.table("ccq_funds").insert({"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).execute()
-                st.toast("✅ Đã lưu!", icon="📊"); time.sleep(1); st.rerun()
+                st.toast("✅ Đã lưu!", icon="📊")
+                clear_cache_and_rerun()
 
 @st.dialog("🥇 GIAO DỊCH VÀNG")
 def modal_gold():
@@ -253,7 +274,8 @@ def modal_gold():
             if qty <= 0 or price <= 0: st.error("⚠️ SL & Giá > 0!")
             else:
                 supabase.table("gold").insert({"trade_date": str(trade_date), "gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).execute()
-                st.toast("✅ Đã lưu!", icon="🥇"); time.sleep(1); st.rerun()
+                st.toast("✅ Đã lưu!", icon="🥇")
+                clear_cache_and_rerun()
 
 @st.dialog("THÊM KHOẢN VAY MỚI")
 def modal_debt():
@@ -274,7 +296,8 @@ def modal_debt():
             if principal <= 0: st.error("⚠️ Tiền vay > 0!")
             else:
                 supabase.table("debts").insert({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "start_date": str(start_date), "interest_rate": rate, "payment_day": int(payment_day), "grace_period": int(grace)}).execute()
-                st.toast("✅ Đã lưu!", icon="🏦"); time.sleep(1); st.rerun()
+                st.toast("✅ Đã lưu!", icon="🏦")
+                clear_cache_and_rerun()
 
 @st.dialog("➕ THÊM TIẾN ĐỘ BĐS")
 def modal_add_realestate():
@@ -346,8 +369,7 @@ def modal_add_realestate():
             }
             supabase.table("realestate").insert(payload).execute()
             st.toast("✅ Đã thêm đợt thanh toán BĐS!", icon="🏠")
-            time.sleep(1)
-            st.rerun()
+            clear_cache_and_rerun()
 
 @st.dialog("➕ TẠO SỔ TIẾT KIỆM MỚI")
 def modal_add_savings():
@@ -366,7 +388,8 @@ def modal_add_savings():
             if amt <= 0: st.error("⚠️ Số tiền > 0!")
             else:
                 supabase.table("savings").insert({"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "note": note, "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}).execute()
-                st.toast("✅ Đã tạo sổ!", icon="💰"); time.sleep(1); st.rerun()
+                st.toast("✅ Đã tạo sổ!", icon="💰")
+                clear_cache_and_rerun()
 
 # --- EDIT MODALS ---
 @st.dialog("✏️ SỬA LỆNH CỔ PHIẾU")
@@ -387,7 +410,8 @@ def modal_edit_stock():
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
             supabase.table("stocks").update({"broker": broker, "fund_owner": fund_owner, "ticker": ticker.upper().strip(), "action": action, "volume": int(volume), "price": float(price), "note": note}).eq("id", row['id']).execute()
             st.session_state.editing_stock = None
-            st.toast("✅ Đã cập nhật!", icon="📈"); time.sleep(1); st.rerun()
+            st.toast("✅ Đã cập nhật!", icon="📈")
+            clear_cache_and_rerun()
 
 @st.dialog("✏️ SỬA GD CHỨNG CHỈ QUỸ")
 def modal_edit_ccq():
@@ -417,7 +441,8 @@ def modal_edit_ccq():
                 nav = total_val / vol
                 supabase.table("ccq_funds").update({"platform": platform, "fund_owner": fund_owner, "ticker": ticker.upper().strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).eq("id", row['id']).execute()
                 st.session_state.editing_ccq = None
-                st.toast("✅ Đã cập nhật!", icon="📊"); time.sleep(1); st.rerun()
+                st.toast("✅ Đã cập nhật!", icon="📊")
+                clear_cache_and_rerun()
 
 @st.dialog("✏️ SỬA GD VÀNG")
 def modal_edit_gold():
@@ -436,7 +461,8 @@ def modal_edit_gold():
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
             supabase.table("gold").update({"gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).eq("id", row['id']).execute()
             st.session_state.editing_gold = None
-            st.toast("✅ Đã cập nhật!", icon="🥇"); time.sleep(1); st.rerun()
+            st.toast("✅ Đã cập nhật!", icon="🥇")
+            clear_cache_and_rerun()
 
 @st.dialog("✏️ SỬA SỔ TIẾT KIỆM")
 def modal_edit_savings():
@@ -455,7 +481,8 @@ def modal_edit_savings():
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
             supabase.table("savings").update({"fund_owner": fund_owner, "amount": int(amount), "interest_rate": float(rate), "term": int(term), "bank": bank, "note": note}).eq("id", row['id']).execute()
             st.session_state.editing_savings = None
-            st.toast("✅ Đã cập nhật!", icon="💰"); time.sleep(1); st.rerun()
+            st.toast("✅ Đã cập nhật!", icon="💰")
+            clear_cache_and_rerun()
 
 @st.dialog("✏️ SỬA THÔNG TIN BĐS")
 def modal_edit_realestate():
@@ -491,7 +518,8 @@ def modal_edit_realestate():
                 "note": note
             }).eq("id", row['id']).execute()
             st.session_state.editing_realestate = None
-            st.toast("✅ Đã cập nhật!", icon="🏠"); time.sleep(1); st.rerun()
+            st.toast("✅ Đã cập nhật!", icon="🏠")
+            clear_cache_and_rerun()
 
 @st.dialog("✏️ SỬA KHOẢN VAY")
 def modal_edit_debt():
@@ -512,7 +540,8 @@ def modal_edit_debt():
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
             supabase.table("debts").update({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "interest_rate": float(rate), "payment_day": int(payment_day), "grace_period": int(grace)}).eq("id", row['id']).execute()
             st.session_state.editing_debt = None
-            st.toast("✅ Đã cập nhật!", icon="🏦"); time.sleep(1); st.rerun()
+            st.toast("✅ Đã cập nhật!", icon="🏦")
+            clear_cache_and_rerun()
 
 # =====================================================================
 # 7. QUICK ACTION BUTTONS
@@ -574,8 +603,7 @@ tong_tien_mat = sum_ob + sum_income - sum_expense
 bds_da_dong = 0.0
 if not df_re.empty and 'amount' in df_re.columns:
     df_re_paid = df_re[df_re['status'].astype(str).str.strip() == 'Đã thanh toán'] if 'status' in df_re.columns else df_re
-    df_re_paid_f = filter_by_member(df_re_paid, current_member, col='project_name')
-    bds_da_dong = pd.to_numeric(df_re_paid_f['amount'], errors='coerce').fillna(0).sum()
+    bds_da_dong = pd.to_numeric(df_re_paid['amount'], errors='coerce').fillna(0).sum()
 
 # 3. INVESTMENTS (STOCKS, CCQ, GOLD)
 df_stk_f = filter_by_member(df_stk, current_member)
@@ -877,7 +905,8 @@ with tab_invest:
                 with ce2:
                     if st.button("❌ XÓA", key="btn_del_stk", use_container_width=True):
                         supabase.table("stocks").delete().eq("id", df_stk_f.iloc[sel_idx_stk]['id']).execute()
-                        st.toast("🗑️ Đã xóa!", icon="✅"); time.sleep(1); st.rerun()
+                        st.toast("🗑️ Đã xóa!", icon="✅")
+                        clear_cache_and_rerun()
                 if st.session_state.get("editing_stock"):
                     modal_edit_stock()
             else:
@@ -907,7 +936,8 @@ with tab_invest:
                 with ce2:
                     if st.button("❌ XÓA", key="btn_del_ccq", use_container_width=True):
                         supabase.table("ccq_funds").delete().eq("id", df_ccq_f.iloc[sel_idx_ccq]['id']).execute()
-                        st.toast("🗑️ Đã xóa!", icon="✅"); time.sleep(1); st.rerun()
+                        st.toast("🗑️ Đã xóa!", icon="✅")
+                        clear_cache_and_rerun()
                 if st.session_state.get("editing_ccq"):
                     modal_edit_ccq()
             else:
@@ -937,7 +967,8 @@ with tab_invest:
                 with ce2:
                     if st.button("❌ XÓA", key="btn_del_gld", use_container_width=True):
                         supabase.table("gold").delete().eq("id", df_gold_f.iloc[sel_idx_gld]['id']).execute()
-                        st.toast("🗑️ Đã xóa!", icon="✅"); time.sleep(1); st.rerun()
+                        st.toast("🗑️ Đã xóa!", icon="✅")
+                        clear_cache_and_rerun()
                 if st.session_state.get("editing_gold"):
                     modal_edit_gold()
             else:
@@ -1027,7 +1058,8 @@ with tab_savings:
                 with sv_e2:
                     if st.button("❌ TẤT TOÁN", key=f"btn_del_sv_{safe_key}", use_container_width=True):
                         supabase.table("savings").delete().eq("id", fund_df.iloc[sel_sv]['id']).execute()
-                        st.toast("🗑️ Đã tất toán!", icon="✅"); time.sleep(1); st.rerun()
+                        st.toast("🗑️ Đã tất toán!", icon="✅")
+                        clear_cache_and_rerun()
             else:
                 st.info(f"Chưa có sổ tiết kiệm nào cho {fund_name}.")
         else:
@@ -1054,11 +1086,41 @@ with tab_realestate:
 
     # --- REAL ESTATE ---
     st.subheader("🏠 Bất động sản đang sở hữu")
-    df_re_f = filter_by_member(df_re, current_member, col='project_name')
+    df_re_f = df_re.copy()
     if not df_re_f.empty:
+        total_contract = df_re_f.groupby('project_name')['contract_value'].first().sum()
+        total_paid = df_re_f[df_re_f['status'].astype(str).str.strip() == 'Đã thanh toán']['amount'].sum()
+        total_unpaid = df_re_f[df_re_f['status'].astype(str).str.strip() == 'Chưa thanh toán']['amount'].sum()
+
+        rm1, rm2, rm3 = st.columns(3)
+        with rm1:
+            st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #38bdf8;">'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Giá Trị Hợp Đồng</div>'
+                        f'<div style="font-size:1.5rem; font-weight:700;">{total_contract:,.0f} ₫</div></div>', unsafe_allow_html=True)
+        with rm2:
+            st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #4ade80;">'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Đã Thanh Toán</div>'
+                        f'<div style="font-size:1.5rem; font-weight:700; color:#4ade80;">{total_paid:,.0f} ₫</div></div>', unsafe_allow_html=True)
+        with rm3:
+            st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #f87171;">'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Chưa Thanh Toán</div>'
+                        f'<div style="font-size:1.5rem; font-weight:700; color:#f87171;">{total_unpaid:,.0f} ₫</div></div>', unsafe_allow_html=True)
+
+        st.markdown("<br/>", unsafe_allow_html=True)
+
         display_cols = [c for c in ['project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note'] if c in df_re_f.columns]
+        df_display = df_re_f[display_cols].copy()
+        
+        def style_re_status(row):
+            s = str(row.get('status', '')).strip()
+            if s == 'Đã thanh toán':
+                return ['background-color: rgba(16, 185, 129, 0.15)'] * len(row)
+            elif s == 'Chưa thanh toán':
+                return ['background-color: rgba(239, 68, 68, 0.2)'] * len(row)
+            return [''] * len(row)
+            
         st.dataframe(
-            df_re_f[display_cols],
+            df_display.style.apply(style_re_status, axis=1),
             hide_index=True,
             use_container_width=True,
             column_config={
@@ -1083,7 +1145,8 @@ with tab_realestate:
             with re_e2:
                 if st.button("❌ XÓA BĐS", key="btn_del_re", use_container_width=True):
                     supabase.table("realestate").delete().eq("id", df_re_f.iloc[sel_re]['id']).execute()
-                    st.toast("🗑️ Đã xóa!", icon="✅"); time.sleep(1); st.rerun()
+                    st.toast("🗑️ Đã xóa!", icon="✅")
+                    clear_cache_and_rerun()
         if st.session_state.get("editing_realestate"):
             modal_edit_realestate()
     else:
@@ -1159,7 +1222,8 @@ with tab_realestate:
             with de2:
                 if st.button("❌ XÓA KHOẢN VAY", key="btn_del_debt", use_container_width=True):
                     supabase.table("debts").delete().eq("id", df_debts_f.iloc[sel_debt]['id']).execute()
-                    st.toast("🗑️ Đã xóa!", icon="✅"); time.sleep(1); st.rerun()
+                    st.toast("🗑️ Đã xóa!", icon="✅")
+                    clear_cache_and_rerun()
         if st.session_state.get("editing_debt"):
             modal_edit_debt()
     else:
