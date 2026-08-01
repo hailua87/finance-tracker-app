@@ -195,13 +195,13 @@ with st.sidebar:
     st.markdown('<div class="hallmark-header" style="font-size:1.5rem;margin-top:20px;">THÀNH VIÊN</div>', unsafe_allow_html=True)
     _members = ["Tất cả", "Daddy", "Mommy", "Baby"]
     _idx = _members.index(st.session_state.current_member) if st.session_state.current_member in _members else 0
-    st.session_state.current_member = sac.segmented(
+    st.session_state.current_member = sac.buttons(
         items=[
-            sac.SegmentedItem(label='Tất cả', icon='people-fill'),
-            sac.SegmentedItem(label='Daddy', icon='person-workspace'),
-            sac.SegmentedItem(label='Mommy', icon='person-hearts'),
-            sac.SegmentedItem(label='Baby', icon='person-arms-up'),
-        ], label='', align='center', use_container_width=True, index=_idx
+            sac.ButtonsItem(label='Tất cả', icon='people-fill', color='gray'),
+            sac.ButtonsItem(label='Daddy', icon='person-workspace', color='blue'),
+            sac.ButtonsItem(label='Mommy', icon='person-hearts', color='pink'),
+            sac.ButtonsItem(label='Baby', icon='person-arms-up', color='green'),
+        ], align='center', use_container_width=True, index=_idx, variant='filled'
     )
 
 current_member = st.session_state.current_member
@@ -630,22 +630,18 @@ def modal_edit_debt():
 # 7. QUICK ACTION BUTTONS
 # =====================================================================
 st.markdown('<div class="metric-title" style="margin-bottom:10px;">⚡ THAO TÁC NHANH</div>', unsafe_allow_html=True)
-qa1, qa2, qa3, qa4 = st.columns(4)
+qa1, qa2, qa3 = st.columns(3)
 with qa1:
     st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("💸\nNhập Chi Tiêu", key="qa_cf", use_container_width=True): modal_cashflow()
+    if st.button("➕ Chi tiêu", key="qa_cf", use_container_width=True): modal_cashflow()
     st.markdown('</div>', unsafe_allow_html=True)
 with qa2:
     st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("📈\nCổ Phiếu", key="qa_stk", use_container_width=True): modal_stock()
+    if st.button("📈 Cổ phiếu", key="qa_stk", use_container_width=True): modal_stock()
     st.markdown('</div>', unsafe_allow_html=True)
 with qa3:
     st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("📊\nChứng Chỉ Quỹ", key="qa_ccq", use_container_width=True): modal_ccq()
-    st.markdown('</div>', unsafe_allow_html=True)
-with qa4:
-    st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("🥇\nVàng", key="qa_gld", use_container_width=True): modal_gold()
+    if st.button("💰 Vàng", key="qa_gld", use_container_width=True): modal_gold()
     st.markdown('</div>', unsafe_allow_html=True)
 
 st.markdown("<br/>", unsafe_allow_html=True)
@@ -805,7 +801,7 @@ def render_net_worth_dashboard(data):
 # 9. TAB DEFINITIONS
 # =====================================================================
 tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
-    "TỔNG QUAN", "DÒNG TIỀN", "ĐẦU TƯ", "TIẾT KIỆM", "BĐS & TÍN DỤNG"
+    "🏠 Tổng quan", "📊 Dòng tiền", "📈 Đầu tư", "🐷 Tiết kiệm", "🏠 BĐS & Tín dụng"
 ])
 
 # =====================================================================
