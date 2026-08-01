@@ -968,13 +968,19 @@ def render_net_worth_dashboard(data, df_cf, current_member):
     last_month_end = this_month_start - datetime.timedelta(days=1)
     last_month_start = last_month_end.replace(day=1)
     
-    df_cf_f = filter_by_member(df_cf, current_member, col='account')
+    # 1. Safe Initialization
+    df_cf_f = filter_by_member(df_cf, current_member, col='account') if (df_cf is not None and not df_cf.empty) else pd.DataFrame()
     
     this_month_savings = 0
     last_month_savings = 0
+    
+    # 2. Safe Column Manipulation
     if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
         df_cf_f = df_cf_f.copy()
         df_cf_f['date'] = pd.to_datetime(df_cf_f['created_at']).dt.date
+    else:
+        # Ensure 'date' column exists even if empty to prevent downstream chart crashes
+        df_cf_f['date'] = pd.Series(dtype='object')
         
         tm_df = df_cf_f[(df_cf_f['date'] >= this_month_start) & (df_cf_f['date'] <= today)].copy()
         if not tm_df.empty:
