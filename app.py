@@ -159,39 +159,28 @@ def clear_cache_and_rerun():
     time.sleep(1)
     st.rerun()
 
-def calc_investment_total(df, group_col, vol_col='volume'):
+def calc_investment_total(df, group_col):
+    import pandas as pd
     if df.empty or group_col not in df.columns:
         return pd.DataFrame(), 0
-    df = df.copy()
-    
-    # Handle volume vs quantity dynamically
-    actual_vol_col = vol_col if vol_col in df.columns else 'quantity'
-    if actual_vol_col not in df.columns:
-        return pd.DataFrame(), 0
-        
-    df[actual_vol_col] = pd.to_numeric(df[actual_vol_col], errors='coerce').fillna(0)
-    df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0)
-    
     summary_list = []
     total_val = 0
     for name, grp in df.groupby(group_col):
-        # Robust Buy/Sell regex matching as requested
-        buy_rows = grp[grp['action'].astype(str).str.lower().str.contains('buy|mua', na=False)]
-        sell_rows = grp[grp['action'].astype(str).str.lower().str.contains('sell|bán', na=False)]
-        
-        buy_vol = buy_rows[actual_vol_col].sum()
-        sell_vol = sell_rows[actual_vol_col].sum()
+        buy_rows = grp[grp['action'].str.lower().str.contains('buy|mua', na=False)]
+        sell_rows = grp[grp['action'].str.lower().str.contains('sell|bán', na=False)]
+        buy_vol = buy_rows['volume'].sum() if 'volume' in grp.columns else buy_rows.get('quantity', pd.Series([0])).sum()
+        sell_vol = sell_rows['volume'].sum() if 'volume' in grp.columns else sell_rows.get('quantity', pd.Series([0])).sum()
         net_vol = buy_vol - sell_vol
         
-        buy_val = (buy_rows[actual_vol_col] * buy_rows['price']).sum()
+        # Compute weighted average cost
+        col_amt = 'volume' if 'volume' in grp.columns else 'quantity'
+        buy_val = (buy_rows[col_amt] * buy_rows['price']).sum()
         avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
-        
         cost = net_vol * avg_price
+        
         if net_vol > 0:
-            # Maintaining dictionary keys compatible with the existing Fintech UI cards
-            summary_list.append({"Tài sản": name, "SL nắm giữ": net_vol, "Giá vốn TB": avg_price, "Giá trị": cost})
+            summary_list.append({group_col: name, "SL tồn": net_vol, "Giá vốn TB": avg_price, "Tổng vốn": cost})
             total_val += cost
-            
     return pd.DataFrame(summary_list), total_val
 
 # =====================================================================
@@ -949,11 +938,11 @@ with tab_invest:
                     <div class="fintech-card">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <div class="fintech-card-title">{row['Tài sản']}</div>
-                                <div class="fintech-card-subtitle">SL: {row['SL nắm giữ']:,.0f} • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
+                                <div class="fintech-card-title">{row['ticker']}</div>
+                                <div class="fintech-card-subtitle">SL: {row['SL tồn']:,.0f} • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
                             </div>
                             <div class="fintech-card-amount text-green">
-                                {row['Giá trị']:,.0f} ₫
+                                {row['Tổng vốn']:,.0f} ₫
                             </div>
                         </div>
                     </div>
@@ -1016,11 +1005,11 @@ with tab_invest:
                     <div class="fintech-card">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <div class="fintech-card-title">{row['Tài sản']}</div>
-                                <div class="fintech-card-subtitle">SL: {row['SL nắm giữ']:,.2f} • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
+                                <div class="fintech-card-title">{row['ticker']}</div>
+                                <div class="fintech-card-subtitle">SL: {row['SL tồn']:,.2f} • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
                             </div>
                             <div class="fintech-card-amount text-green">
-                                {row['Giá trị']:,.0f} ₫
+                                {row['Tổng vốn']:,.0f} ₫
                             </div>
                         </div>
                     </div>
@@ -1074,7 +1063,7 @@ with tab_invest:
     with inv_gld:
         gld_sum_tab, gld_hist_tab = st.tabs(["📊 Tổng hợp", "📋 Lịch sử GD"])
         with gld_sum_tab:
-            summary_gld, _ = calc_investment_total(df_gold_f, 'gold_type', vol_col='quantity')
+            summary_gld, _ = calc_investment_total(df_gold_f, 'gold_type')
             if not summary_gld.empty:
                 st.metric("🥇 Tổng giá trị Vàng", f"{tong_vang:,.0f} ₫")
                 for _, row in summary_gld.iterrows():
@@ -1082,11 +1071,11 @@ with tab_invest:
                     <div class="fintech-card">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <div class="fintech-card-title">{row['Tài sản']}</div>
-                                <div class="fintech-card-subtitle">SL: {row['SL nắm giữ']:,.2f} chỉ • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
+                                <div class="fintech-card-title">{row['gold_type']}</div>
+                                <div class="fintech-card-subtitle">SL: {row['SL tồn']:,.2f} chỉ • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
                             </div>
                             <div class="fintech-card-amount text-green">
-                                {row['Giá trị']:,.0f} ₫
+                                {row['Tổng vốn']:,.0f} ₫
                             </div>
                         </div>
                     </div>
