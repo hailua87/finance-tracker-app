@@ -3,12 +3,13 @@ import pandas as pd
 from datetime import date, timedelta
 import calendar
 import time
+import re
 from supabase import create_client, Client
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 
-# 1. THIẾT LẬP CẤU HÌNH & KẾT NỐI SUPABASE (TỐI ƯU ICON CHO APP MOBILE)
+# 1. THIẾT LẬP CẤU HÌNH & KẾT NỐI SUPABASE
 st.set_page_config(
     page_title="Nhà Quê Tập Chi Tiêu", 
     page_icon="💰", 
@@ -29,55 +30,25 @@ if "last_account" not in st.session_state:
 # 3. HALLMARK CUSTOM CSS INJECTION & MODERN UI ENHANCEMENTS
 st.markdown("""
 <style>
-    /* Nhúng font Serif mộc mạc nhưng sang trọng (Playfair Display) cho Tiêu đề */
     @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Inter:wght@400;500;600&display=swap');
     
-    /* CHỈ ÉP FONT INTER CHO VĂN BẢN (BẢO VỆ FONT ICON HỆ THỐNG STREAMLIT) */
-    html, body, p, div, span, button, input, select, textarea, label, td, th { 
-        font-family: 'Inter', sans-serif; 
-    }
-    
-    /* Fix triệt để lỗi hiện chữ _arrow_right_ ở bộ lọc expander */
-    .stIcon, span[data-baseweb="icon"], svg { 
-        font-family: inherit !important; 
-    }
-    
-    h1, h2, h3, .hallmark-header, .stMetricValue { 
-        font-family: 'Playfair Display', serif !important; 
-        letter-spacing: -0.01em; 
-    }
+    html, body, p, div, span, button, input, select, textarea, label, td, th { font-family: 'Inter', sans-serif; }
+    .stIcon, span[data-baseweb="icon"], svg { font-family: inherit !important; }
+    h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Playfair Display', serif !important; letter-spacing: -0.01em; }
     
     .hallmark-header { 
-        font-size: 2.2rem; 
-        font-weight: 700; 
-        color: #f8fafc; 
-        border-left: 6px solid #10b981; 
-        padding-left: 15px; 
-        margin-bottom: 15px; 
-        margin-top: -25px; 
+        font-size: 2.2rem; font-weight: 700; color: #f8fafc; 
+        border-left: 6px solid #10b981; padding-left: 15px; 
+        margin-bottom: 15px; margin-top: -25px; 
     }
     
-    .metric-title { 
-        font-size: 0.8rem; 
-        text-transform: uppercase; 
-        letter-spacing: 0.05em; 
-        color: #94a3b8; 
-        font-weight: 600; 
-    }
+    .metric-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; }
     
-    /* Thu nhỏ padding tổng thể trang để tối ưu cho Mobile */
-    .block-container { 
-        padding-top: 1.5rem !important; 
-        padding-bottom: 1.5rem !important; 
-        gap: 0.5rem !important; 
-    }
+    .block-container { padding-top: 1.5rem !important; padding-bottom: 1.5rem !important; gap: 0.5rem !important; }
     
-    /* Bo tròn góc và viền xanh lá mờ cho st.metric */
     div[data-testid="metric-container"] { 
-        border-radius: 12px; 
-        border: 1px solid rgba(16, 185, 129, 0.2); 
-        padding: 15px; 
-        background-color: rgba(16, 185, 129, 0.03); 
+        border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.2); 
+        padding: 15px; background-color: rgba(16, 185, 129, 0.03); 
         box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
     }
     
@@ -86,6 +57,44 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="hallmark-header">NHÀ QUÊ TẬP CHI TIÊU.</div>', unsafe_allow_html=True)
+
+# --- THUẬT TOÁN NHẬP LIỆU THÔNG MINH (SMART PARSER) ---
+def parse_smart_amount(input_str):
+    if not input_str: return 0
+    s = str(input_str).lower().strip().replace(' ', '')
+    if s == '': return 0
+    
+    # Tách phần số và phần chữ (unit)
+    match = re.match(r'^([\d\,\.]+)(k|tr|triệu|tỷ|ty|m|b|e\d+)?$', s)
+    if not match:
+        try: return float(s)
+        except: return -1 # Lỗi nhập liệu
+        
+    num_part = match.group(1)
+    unit_part = match.group(2)
+    
+    # Xử lý Logic Dấu Chấm & Phẩy kiểu Việt Nam
+    if '.' in num_part and ',' in num_part:
+        num_part = num_part.replace('.', '').replace(',', '.')
+    elif ',' in num_part:
+        if num_part.count(',') > 1 or len(num_part.split(',')[-1]) == 3:
+            num_part = num_part.replace(',', '') # VD: 1,000,000 -> 1000000
+        else:
+            num_part = num_part.replace(',', '.') # VD: 1,5 -> 1.5
+    elif '.' in num_part:
+        if num_part.count('.') > 1 or len(num_part.split('.')[-1]) == 3:
+            num_part = num_part.replace('.', '') # VD: 1.000.000 -> 1000000
+            
+    try:
+        val = float(num_part)
+        if unit_part == 'k': val *= 1_000
+        elif unit_part in ['tr', 'triệu', 'm']: val *= 1_000_000
+        elif unit_part in ['tỷ', 'ty', 'b']: val *= 1_000_000_000
+        elif unit_part and unit_part.startswith('e'): 
+            val = float(num_part + unit_part)
+        return val
+    except:
+        return -1
 
 # --- DANH MỤC CƠ SỞ ---
 DEBIT_ACCOUNTS = ["VCB chồng", "TCB chồng", "TCB vợ"]
@@ -100,7 +109,7 @@ CATS = ["Lương/Thu nhập", "Ăn uống & Sinh hoạt", "Giáo dục (Con cái
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 
 # =====================================================================
-# 4. KHO MODAL (@st.dialog) - SMART FORMS & VALIDATION
+# 4. KHO MODAL (@st.dialog) - TÍCH HỢP SMART FORMS
 # =====================================================================
 
 @st.dialog("💸 GHI NHẬN DÒNG TIỀN")
@@ -113,11 +122,13 @@ def modal_cashflow():
         with c2:
             category = st.selectbox("Phân loại", CATS)
             
-        amount = st.number_input("Số tiền (VND)", min_value=0, step=10000, format="%d")
+        amount_str = st.text_input("Số tiền (Hỗ trợ nhập tắt: 1,5tr, 500k, 1e6)", placeholder="VD: 50k, 1.5tr, 2000000")
         note = st.text_input("Ghi chú")
         
         if st.form_submit_button("LƯU GIAO DỊCH", use_container_width=True):
-            if amount <= 0: st.error("⚠️ Vui lòng nhập số tiền lớn hơn 0!")
+            amount = parse_smart_amount(amount_str)
+            if amount <= 0: 
+                st.error("⚠️ Số tiền không hợp lệ! Vui lòng nhập số lớn hơn 0.")
             else:
                 try:
                     data = {"account": account, "amount": int(amount), "category": category, "note": note}
@@ -138,11 +149,13 @@ def modal_edit_cashflow(row_data):
         with c1: account = st.selectbox("Tài khoản nguồn", BANK_ACCOUNTS, index=idx_acc)
         with c2: category = st.selectbox("Phân loại", CATS, index=idx_cat)
             
-        amount = st.number_input("Số tiền (VND)", min_value=0, step=10000, format="%d", value=int(row_data['amount']))
+        current_amt = f"{int(row_data['amount']):,}"
+        amount_str = st.text_input("Số tiền (Hỗ trợ nhập tắt: 1.5tr, 500k)", value=current_amt)
         note = st.text_input("Ghi chú", value=row_data['note'] if row_data['note'] else "")
         
         if st.form_submit_button("CẬP NHẬT", use_container_width=True):
-            if amount <= 0: st.error("⚠️ Số tiền phải lớn hơn 0!")
+            amount = parse_smart_amount(amount_str)
+            if amount <= 0: st.error("⚠️ Số tiền không hợp lệ!")
             else:
                 try:
                     data = {"account": account, "amount": int(amount), "category": category, "note": note}
@@ -163,16 +176,19 @@ def modal_stock():
         action = st.radio("Lệnh", ["Mua", "Bán"], horizontal=True)
         
         c3, c4 = st.columns(2)
-        with c3: volume = st.number_input("Khối lượng (CP)", min_value=1, step=100, format="%d", value=100)
-        with c4: price = st.number_input("Giá khớp / Giá vốn TB (VND)", min_value=0, step=1000, format="%d")
+        with c3: vol_str = st.text_input("Khối lượng (VD: 1k, 500)", value="100")
+        with c4: price_str = st.text_input("Giá khớp / Giá vốn TB (VD: 22.5k)", placeholder="Nhập giá...")
             
         c5, c6 = st.columns(2)
         with c5: trade_date = st.date_input("Ngày giao dịch")
         with c6: note = st.text_input("Ghi chú", placeholder="VD: Mua mới")
             
         if st.form_submit_button("LƯU LỆNH", use_container_width=True):
+            volume = parse_smart_amount(vol_str)
+            price = parse_smart_amount(price_str)
+            
             if ticker.strip() == "": st.error("⚠️ Vui lòng nhập mã cổ phiếu!")
-            elif price <= 0: st.error("⚠️ Giá khớp phải lớn hơn 0!")
+            elif volume <= 0 or price <= 0: st.error("⚠️ Khối lượng và Giá phải lớn hơn 0!")
             else:
                 try:
                     data = {"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner_stock, "ticker": ticker.strip(), "action": action, "volume": int(volume), "price": float(price), "note": note}
@@ -193,15 +209,19 @@ def modal_ccq():
         action_ccq = st.radio("Lệnh quỹ", ["Mua (SIP)", "Bán"], horizontal=True)
         
         c3, c4 = st.columns(2)
-        with c3: volume_ccq = st.number_input("Số lượng CCQ", min_value=0.01, step=0.1, format="%.2f")
-        with c4: nav_price = st.number_input("Giá NAV / Giá vốn TB (VND)", min_value=0, step=1000, format="%d")
+        with c3: vol_str = st.text_input("Số lượng CCQ (Lẻ thập phân)", value="10.0")
+        with c4: price_str = st.text_input("Giá NAV (VD: 25.4k, 25400)", placeholder="Nhập giá NAV...")
             
         c5, c6 = st.columns(2)
         with c5: trade_date = st.date_input("Ngày giao dịch")
         with c6: note = st.text_input("Ghi chú", placeholder="VD: Đầu tư SIP hàng tháng")
             
         if st.form_submit_button("LƯU GIAO DỊCH QUỸ", use_container_width=True):
+            volume_ccq = parse_smart_amount(vol_str)
+            nav_price = parse_smart_amount(price_str)
+            
             if fund_ticker.strip() == "": st.error("⚠️ Vui lòng nhập mã quỹ!")
+            elif volume_ccq <= 0 or nav_price <= 0: st.error("⚠️ Số lượng và Giá NAV phải hợp lệ!")
             else:
                 try:
                     data = {"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner_ccq, "ticker": fund_ticker.strip(), "action": action_ccq, "volume": float(volume_ccq), "price": float(nav_price), "note": note}
@@ -218,7 +238,7 @@ def modal_savings():
         with c1: new_fund = st.selectbox("Chọn Portfolio", FUNDS)
         with c2: new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS)
             
-        new_amount = st.number_input("Số tiền gốc (VND)", min_value=0, step=1000000, format="%d")
+        amount_str = st.text_input("Số tiền gốc (VD: 50tr, 100tr)", placeholder="Nhập tiền gốc...")
         
         c3, c4 = st.columns(2)
         with c3: new_date = st.date_input("Ngày gửi")
@@ -227,6 +247,7 @@ def modal_savings():
         new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f")
         
         if st.form_submit_button("LƯU KHOẢN GỬI", use_container_width=True):
+            new_amount = parse_smart_amount(amount_str)
             if new_amount <= 0: st.error("⚠️ Vui lòng nhập số tiền gốc hợp lệ!")
             else:
                 try:
@@ -248,7 +269,8 @@ def modal_edit_savings(row_data):
             idx_bank = BANK_ACCOUNTS.index(row_data['bank']) if row_data['bank'] in BANK_ACCOUNTS else 0
             new_bank = st.selectbox("Ngân hàng", BANK_ACCOUNTS, index=idx_bank)
             
-        new_amount = st.number_input("Số tiền gốc (VND)", min_value=0, step=1000000, format="%d", value=int(row_data['amount']))
+        current_amt = f"{int(row_data['amount']):,}"
+        amount_str = st.text_input("Số tiền gốc (VD: 50tr)", value=current_amt)
         
         c3, c4 = st.columns(2)
         with c3:
@@ -262,6 +284,7 @@ def modal_edit_savings(row_data):
         new_rate = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f", value=float(row_data['interest_rate']))
         
         if st.form_submit_button("CẬP NHẬT SỔ TIẾT KIỆM", use_container_width=True):
+            new_amount = parse_smart_amount(amount_str)
             if new_amount <= 0: st.error("⚠️ Vui lòng nhập số tiền gốc hợp lệ!")
             else:
                 try:
@@ -284,7 +307,8 @@ def modal_realestate():
     
     if choice == "➕ Thêm dự án mới...":
         bds_name = st.text_input("Nhập tên dự án mới (VD: TT Avio B.30.05)")
-        gia_tri_hd = st.number_input("Giá trị hợp đồng (VND)", min_value=0, step=1000000, format="%d")
+        gia_tri_str = st.text_input("Giá trị hợp đồng (VD: 1.5tỷ, 1500tr)", placeholder="Nhập giá trị...")
+        gia_tri_hd = parse_smart_amount(gia_tri_str)
     else:
         bds_name = choice
         gia_tri_hd = existing_projects[choice]
@@ -294,8 +318,10 @@ def modal_realestate():
     dot_tt = st.text_input("Tên đợt thanh toán (VD: Đợt 4 - Cất nóc)")
     
     c1, c2 = st.columns(2)
-    with c1: so_tien_tt = st.number_input("Số tiền thanh toán (VND)", min_value=0, step=1000000, format="%d")
-    with c2: nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES)
+    with c1: 
+        tien_tt_str = st.text_input("Số tiền thanh toán (VD: 50tr)")
+    with c2: 
+        nguon_tien = st.selectbox("Nguồn tiền", FUNDING_SOURCES)
         
     c3, c4 = st.columns(2)
     with c3: ngay_tt = st.date_input("Hạn thanh toán")
@@ -304,8 +330,9 @@ def modal_realestate():
     ghi_chu = st.text_input("Ghi chú (Tùy chọn)")
     
     if st.button("LƯU TIẾN ĐỘ BĐS", use_container_width=True):
+        so_tien_tt = parse_smart_amount(tien_tt_str)
         if not bds_name.strip() or not dot_tt.strip(): st.error("⚠️ Vui lòng nhập tên dự án và đợt thanh toán!")
-        elif so_tien_tt <= 0: st.error("⚠️ Vui lòng nhập số tiền thanh toán!")
+        elif so_tien_tt <= 0 or gia_tri_hd <= 0: st.error("⚠️ Vui lòng nhập số tiền thanh toán / Giá trị HĐ hợp lệ!")
         else:
             try:
                 data = {"project_name": bds_name, "contract_value": int(gia_tri_hd), "installment_name": dot_tt, "amount": int(so_tien_tt), "funding_source": nguon_tien, "due_date": str(ngay_tt), "status": trang_thai, "note": ghi_chu}
@@ -321,22 +348,25 @@ def modal_debt():
         
         st.markdown("**Thông số giải ngân & Thời hạn**")
         c1, c2 = st.columns(2)
-        with c1: tien_vay_ban_dau = st.number_input("Tổng tiền vay GỐC (VND)", min_value=0, step=1000000, format="%d", value=1000000000)
-        with c2: tong_thoi_gian = st.number_input("Tổng thời gian vay (Tháng)", min_value=1, step=1, format="%d", value=180)
+        with c1: 
+            vay_str = st.text_input("Tổng tiền vay GỐC (VD: 1.8tỷ, 1800tr)", placeholder="1.8tỷ")
+        with c2: 
+            tong_thoi_gian = st.number_input("Tổng thời gian vay (Tháng)", min_value=1, step=1, format="%d", value=180)
             
         st.markdown("**Thông số thanh toán (Ân hạn & Ngày TT)**")
         c3, c4 = st.columns(2)
         with c3: ngay_giai_ngan = st.date_input("Ngày giải ngân (Bắt đầu tính nợ)")
-        with c4: payment_day = st.number_input("Ngày thanh toán hàng tháng", min_value=1, max_value=31, value=5, help="Ví dụ: Đóng tiền vào ngày mùng 5 hàng tháng")
+        with c4: payment_day = st.number_input("Ngày thanh toán hàng tháng", min_value=1, max_value=31, value=5)
         
         c5, c6 = st.columns(2)
-        with c5: grace_period = st.number_input("Số tháng Ân hạn gốc", min_value=0, step=1, value=1, help="Thời gian đầu chỉ trả Lãi, không trả Gốc (VD: 1 tháng, 12 tháng)")
+        with c5: grace_period = st.number_input("Số tháng Ân hạn gốc", min_value=0, step=1, value=1)
         with c6: lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f", value=7.3)
             
         st.info("💡 Hệ thống tự động xử lý thuật toán ân hạn gốc và tính dư nợ theo ngày thanh toán cố định.")
         
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
-            if tien_vay_ban_dau <= 0: st.error("⚠️ Tiền vay phải lớn hơn 0!")
+            tien_vay_ban_dau = parse_smart_amount(vay_str)
+            if tien_vay_ban_dau <= 0: st.error("⚠️ Số tiền vay không hợp lệ!")
             else:
                 try:
                     data = {
@@ -350,8 +380,44 @@ def modal_debt():
                     st.rerun()
                 except Exception as e: st.error(f"Lỗi: {e}")
 
+@st.dialog("SỬA KHOẢN VAY")
+def modal_edit_debt(row_data):
+    with st.form("edit_debt_form", clear_on_submit=False):
+        muc_dich = st.text_input("Mục đích vay", value=row_data['purpose'])
+        bank_opts = BANK_ACCOUNTS + ["Khác"]
+        idx_bank = bank_opts.index(row_data['bank']) if row_data['bank'] in bank_opts else 0
+        ngan_hang = st.selectbox("Ngân hàng cho vay", bank_opts, index=idx_bank)
+        
+        c1, c2 = st.columns(2)
+        with c1: 
+            current_amt = f"{int(row_data['original_principal']):,}"
+            vay_str = st.text_input("Tổng tiền vay BAN ĐẦU", value=current_amt)
+        with c2: 
+            tong_thoi_gian = st.number_input("Tổng thời gian (Tháng)", min_value=1, step=1, value=int(row_data['total_months']))
+            
+        c3, c4 = st.columns(2)
+        with c3:
+            try: start_dt = pd.to_datetime(row_data['start_date']).date()
+            except: start_dt = date.today()
+            ngay_giai_ngan = st.date_input("Ngày giải ngân", value=start_dt)
+        with c4:
+            lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.3f", value=float(row_data['interest_rate']))
+            
+        if st.form_submit_button("CẬP NHẬT KHOẢN VAY", use_container_width=True):
+            tien_vay_ban_dau = parse_smart_amount(vay_str)
+            if tien_vay_ban_dau <= 0: st.error("⚠️ Tiền vay phải lớn hơn 0!")
+            else:
+                try:
+                    data = {"purpose": muc_dich, "bank": ngan_hang, "original_principal": int(tien_vay_ban_dau), "total_months": int(tong_thoi_gian), "start_date": str(ngay_giai_ngan), "interest_rate": lai_suat}
+                    supabase.table("debts").update(data).eq("id", row_data['id']).execute()
+                    st.toast("✅ Đã cập nhật!", icon="🔄")
+                    time.sleep(1.5)
+                    st.rerun()
+                except Exception as e: st.error(f"Lỗi: {e}")
+
 @st.dialog("CẤU HÌNH SỐ DƯ GỐC BAN ĐẦU")
 def modal_opening_balance():
+    # Để giữ form Opening Balance gọn gàng vì có quá nhiều ô input, ta dùng number_input mặc định
     with st.form("opening_balance_form"):
         try:
             res = supabase.table("opening_balances").select("*").execute()
@@ -589,7 +655,7 @@ with tab_home:
     st.plotly_chart(plot_net_worth_trend(tong_tai_san, no_khoan_vay), use_container_width=True)
 
 # =====================================================================
-# TAB 1: DÒNG TIỀN (VỚI BỘ LỌC ẨN BẰNG EXPANDER)
+# TAB 1: DÒNG TIỀN
 # =====================================================================
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
@@ -911,7 +977,7 @@ with tab_savings:
                     st.rerun()
 
 # =====================================================================
-# TAB 4: BĐS & TÍN DỤNG (THUẬT TOÁN ÂN HẠN GỐC & NGÀY THANH TOÁN)
+# TAB 4: BĐS & TÍN DỤNG
 # =====================================================================
 with tab_realestate:
     col_re_btn, col_debt_btn, _ = st.columns([1.2, 1.2, 2])
@@ -965,7 +1031,7 @@ with tab_realestate:
             time.sleep(1)
             st.rerun()
 
-    # --- KHOẢN VAY (THUẬT TOÁN ÂN HẠN GỐC & NGÀY THANH TOÁN CỐ ĐỊNH) ---
+    # --- KHOẢN VAY ---
     st.subheader("Khoản vay tín dụng & Dư nợ")
     
     try:
