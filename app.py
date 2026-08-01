@@ -725,7 +725,32 @@ def calculate_net_worth(supabase_client, fund_owner=None):
     total_re = pd.to_numeric(df_re['contract_value'], errors='coerce').fillna(0).unique().sum() if not df_re.empty and 'contract_value' in df_re.columns else 0
 
     df_debts = get_data('debts')
-    total_debts = pd.to_numeric(df_debts['original_principal'], errors='coerce').fillna(0).sum() if not df_debts.empty and 'original_principal' in df_debts.columns else 0
+    total_debts = 0
+    if not df_debts.empty and 'original_principal' in df_debts.columns:
+        today_dt = pd.to_datetime(pd.Timestamp.today().date())
+        for _, row in df_debts.iterrows():
+            principal = pd.to_numeric(row.get('original_principal', 0), errors='coerce')
+            if pd.isna(principal): principal = 0
+            months = pd.to_numeric(row.get('total_months', 1), errors='coerce')
+            if pd.isna(months): months = 1
+            grace = pd.to_numeric(row.get('grace_period', 0), errors='coerce')
+            if pd.isna(grace): grace = 0
+            pay_day = pd.to_numeric(row.get('payment_day', 5), errors='coerce')
+            if pd.isna(pay_day): pay_day = 5
+            
+            start_dt = pd.to_datetime(row.get('start_date'), errors='coerce')
+            if pd.isna(start_dt) or start_dt is pd.NaT:
+                total_debts += principal
+                continue
+                
+            months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
+            if today_dt.day < pay_day:
+                months_diff -= 1
+            months_elapsed = max(0, min(months_diff, months))
+            effective_months = max(1, months - grace)
+            monthly_principal = principal / effective_months
+            balance = max(0, principal - (monthly_principal * max(0, months_elapsed - grace)))
+            total_debts += balance
 
     total_assets = total_cash + total_savings + total_stocks + total_gold + total_ccq + total_re
     net_worth = total_assets - total_debts
@@ -867,8 +892,7 @@ with tab_cashflow:
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div class="fintech-card-title">{cat}</div>
-                                <div class="fintech-card-subtitle">{dt_str} • {acc}</div>
-                                {note_str}
+                                <div class="fintech-card-subtitle">{dt_str} • {acc}</div>{note_str}
                             </div>
                             <div class="fintech-card-amount {color_cls}">
                                 {sign}{amt:,.0f} ₫
@@ -965,13 +989,21 @@ with tab_invest:
                     dt_val = row.get('trade_date')
                     dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
                     note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
+                    action = str(row.get('action', ''))
+                    color_cls = "text-green" if "Mua" in action else "text-yellow"
+                    sign = "-" if "Mua" in action else "+"
+                    volume = safe_float(row.get('volume'))
+                    price = safe_float(row.get('price'))
+                    val = volume * price
+                    dt_val = row.get('trade_date')
+                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
+                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
                     st.markdown(f'''
                     <div class="fintech-card">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
-                                <div class="fintech-card-subtitle">{dt_str} • KL: {vol:,.0f} • Giá: {prc:,.0f}</div>
-                                {note_str}
+                                <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{action}</span></div>
+                                <div class="fintech-card-subtitle">{dt_str} • KL: {volume:,.0f} • Giá: {price:,.0f} ₫</div>{note_str}
                             </div>
                             <div class="fintech-card-amount {color_cls}">
                                 {sign}{val:,.0f} ₫
@@ -1037,8 +1069,7 @@ with tab_invest:
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
-                                <div class="fintech-card-subtitle">{dt_str} • SL: {vol:,.2f} • NAV: {prc:,.0f}</div>
-                                {note_str}
+                                <div class="fintech-card-subtitle">{dt_str} • SL: {vol:,.2f} • NAV: {prc:,.0f}</div>{note_str}
                             </div>
                             <div class="fintech-card-amount {color_cls}">
                                 {sign}{val:,.0f} ₫
@@ -1103,8 +1134,7 @@ with tab_invest:
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div class="fintech-card-title" style="color: var(--accent-gold);">{row.get('gold_type', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px; color: #f8fafc;">{act}</span></div>
-                                <div class="fintech-card-subtitle">{dt_str} • SL: {qty:,.2f} chỉ • Giá: {prc:,.0f}</div>
-                                {note_str}
+                                <div class="fintech-card-subtitle">{dt_str} • SL: {qty:,.2f} chỉ • Giá: {prc:,.0f} ₫</div>{note_str}
                             </div>
                             <div class="fintech-card-amount {color_cls}">
                                 {sign}{val:,.0f} ₫
@@ -1208,8 +1238,7 @@ with tab_savings:
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
                                 <div class="fintech-card-title">🏦 {bank}</div>
-                                <div class="fintech-card-subtitle">Lãi suất: {rate}%/năm • Kỳ hạn: {trm:,.0f} tháng • Ngày gửi: {dt_str}</div>
-                                {note_html}
+                                <div class="fintech-card-subtitle">Lãi suất: {rate}%/năm • Kỳ hạn: {trm:,.0f} tháng • Ngày gửi: {dt_str}</div>{note_html}
                             </div>
                             <div class="fintech-card-amount text-green">
                                 {amt:,.0f} ₫
@@ -1309,8 +1338,7 @@ with tab_realestate:
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
                         <div class="fintech-card-title" style="color: var(--accent-gold);">🏢 {proj} - {inst} <span style="font-size:0.8rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px; color: #f8fafc;">{stat}</span></div>
-                        <div class="fintech-card-subtitle">Hạn TT: {dt_str} • Nguồn: {src}</div>
-                        {note_html}
+                        <div class="fintech-card-subtitle">Hạn TT: {dt_str} • Nguồn: {src}</div>{note_html}
                     </div>
                     <div class="fintech-card-amount {color_cls}">
                         {amt:,.0f} ₫
