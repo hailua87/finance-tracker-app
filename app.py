@@ -632,92 +632,141 @@ df_ob = fetch_table("opening_balances")
 # =====================================================================
 # METRIC PRE-COMPUTATION FOR ACCURACY & TABS
 # =====================================================================
-def get_net_worth_data(member):
-    """Tính toán tất cả các chỉ số tài sản và nợ dựa trên thành viên (BA Logic)."""
-    # 1. CASH (TIỀN MẶT)
-    target_accounts = DEBIT_ACCOUNTS + BROKER_ACCOUNTS
-    df_ob_target = df_ob[df_ob['account'].isin(target_accounts)] if not df_ob.empty and 'account' in df_ob.columns else pd.DataFrame()
-    df_ob_f = filter_by_member(df_ob_target, member, col='account')
-    col_ob = 'balance' if 'balance' in df_ob_f.columns else ('amount' if 'amount' in df_ob_f.columns else None)
-    sum_ob = pd.to_numeric(df_ob_f[col_ob], errors='coerce').fillna(0).sum() if (not df_ob_f.empty and col_ob) else 0.0
+def calculate_net_worth(supabase_client, fund_owner=None):
+    """
+    Tính toán tổng tài sản ròng dựa trên tất cả các bảng trong Supabase.
+    Có hỗ trợ lọc theo fund_owner (Daddy, Mommy, Baby).
+    """
+    import pandas as pd
+    
+    def get_data(table_name):
+        query = supabase_client.table(table_name).select("*")
+        if fund_owner and fund_owner != "Tất cả" and table_name in ['savings', 'stocks', 'gold', 'ccq_funds']:
+            # Lọc bằng dictionary mapping hoặc string tùy theo schema
+            valid_funds = [f for f, m in FUND_MEMBER_MAP.items() if m == fund_owner]
+            if valid_funds:
+                query = query.in_('fund_owner', valid_funds)
+            else:
+                # If no mapping, just eq
+                query = query.eq('fund_owner', fund_owner)
+        
+        response = query.execute()
+        return pd.DataFrame(response.data) if response and response.data else pd.DataFrame()
 
-    df_cf_f_cash = filter_by_member(df_cf, member, col='account')
-    sum_inc, sum_exp = 0.0, 0.0
-    if not df_cf_f_cash.empty and 'category' in df_cf_f_cash.columns and 'amount' in df_cf_f_cash.columns:
-        df_cf_f_cash['amount_num'] = pd.to_numeric(df_cf_f_cash['amount'], errors='coerce').fillna(0)
-        sum_inc = df_cf_f_cash[df_cf_f_cash['category'] == 'Lương/Thu nhập']['amount_num'].sum()
-        sum_exp = df_cf_f_cash[df_cf_f_cash['category'] != 'Lương/Thu nhập']['amount_num'].sum()
-    tien_mat = sum_ob + sum_inc - sum_exp
+    df_balances = get_data('opening_balances')
+    total_cash = 0
+    if not df_balances.empty and 'balance' in df_balances.columns:
+        total_cash = pd.to_numeric(df_balances['balance'], errors='coerce').fillna(0).sum()
+    elif not df_balances.empty and 'amount' in df_balances.columns:
+        total_cash = pd.to_numeric(df_balances['amount'], errors='coerce').fillna(0).sum()
 
-    # 2. REAL ESTATE (BĐS)
-    bds = 0.0
-    if not df_re.empty and 'amount' in df_re.columns:
-        df_re_paid = df_re[df_re['status'].astype(str).str.strip() == 'Đã thanh toán'] if 'status' in df_re.columns else df_re
-        bds = pd.to_numeric(df_re_paid['amount'], errors='coerce').fillna(0).sum()
+    df_savings = get_data('savings')
+    total_savings = pd.to_numeric(df_savings['amount'], errors='coerce').fillna(0).sum() if not df_savings.empty and 'amount' in df_savings.columns else 0
 
-    # 3. INVESTMENTS (STOCKS, CCQ, GOLD)
-    df_stk_f = filter_by_member(df_stk, member)
-    _, cp = calc_investment_total(df_stk_f, 'ticker')
+    df_stocks = get_data('stocks')
+    total_stocks = 0
+    if not df_stocks.empty and 'volume' in df_stocks.columns and 'price' in df_stocks.columns:
+        df_stocks['volume'] = pd.to_numeric(df_stocks['volume'], errors='coerce').fillna(0)
+        df_stocks['price'] = pd.to_numeric(df_stocks['price'], errors='coerce').fillna(0)
+        df_stocks['value'] = df_stocks.apply(
+            lambda x: x['volume'] * x['price'] if any(w in str(x['action']).lower() for w in ['buy', 'mua']) else -x['volume'] * x['price'], axis=1
+        )
+        total_stocks = df_stocks['value'].sum()
 
-    df_ccq_f = filter_by_member(df_ccq, member)
-    _, ccq = calc_investment_total(df_ccq_f, 'ticker')
+    df_gold = get_data('gold')
+    total_gold = 0
+    if not df_gold.empty and 'quantity' in df_gold.columns and 'price' in df_gold.columns:
+        df_gold['quantity'] = pd.to_numeric(df_gold['quantity'], errors='coerce').fillna(0)
+        df_gold['price'] = pd.to_numeric(df_gold['price'], errors='coerce').fillna(0)
+        df_gold['value'] = df_gold.apply(
+            lambda x: x['quantity'] * x['price'] if any(w in str(x['action']).lower() for w in ['buy', 'mua']) else -x['quantity'] * x['price'], axis=1
+        )
+        total_gold = df_gold['value'].sum()
 
-    df_gold_f = filter_by_member(df_gold, member)
-    _, vang = calc_investment_total(df_gold_f, 'gold_type', vol_col='quantity')
+    df_ccq = get_data('ccq_funds')
+    total_ccq = 0
+    if not df_ccq.empty and 'volume' in df_ccq.columns and 'price' in df_ccq.columns:
+        df_ccq['volume'] = pd.to_numeric(df_ccq['volume'], errors='coerce').fillna(0)
+        df_ccq['price'] = pd.to_numeric(df_ccq['price'], errors='coerce').fillna(0)
+        df_ccq['value'] = df_ccq.apply(
+            lambda x: x['volume'] * x['price'] if any(w in str(x['action']).lower() for w in ['buy', 'mua']) else -x['volume'] * x['price'], axis=1
+        )
+        total_ccq = df_ccq['value'].sum()
 
-    # 4. SAVINGS (TIẾT KIỆM)
-    df_savings_f = filter_by_member(df_savings, member, col='fund_owner')
-    tiet_kiem = pd.to_numeric(df_savings_f['amount'], errors='coerce').fillna(0).sum() if not df_savings_f.empty and 'amount' in df_savings_f.columns else 0.0
+    df_re = get_data('realestate')
+    total_re = pd.to_numeric(df_re['contract_value'], errors='coerce').fillna(0).unique().sum() if not df_re.empty and 'contract_value' in df_re.columns else 0
 
-    # 5. DEBTS (NỢ)
-    no_vay = 0.0
-    thang_no = 0.0
-    df_debts_f = filter_by_member(df_debts, member)
-    if not df_debts_f.empty:
-        today_dt = pd.to_datetime(date.today())
-        for _, row in df_debts_f.iterrows():
-            principal = safe_float(row.get('original_principal'))
-            rate = safe_float(row.get('interest_rate'))
-            months = int(safe_float(row.get('total_months')))
-            grace = int(safe_float(row.get('grace_period')))
-            pay_day = int(safe_float(row.get('payment_day', 5)))
-            start_dt = pd.to_datetime(row.get('start_date'), errors='coerce')
-            if pd.isna(start_dt) or start_dt is pd.NaT:
-                continue
-            months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
-            if today_dt.day < pay_day:
-                months_diff -= 1
-            months_elapsed = max(0, min(months_diff, months))
-            effective_months = max(1, months - grace)
-            monthly_principal = principal / effective_months
-            balance = max(0, principal - (monthly_principal * max(0, months_elapsed - grace)))
-            no_vay += balance
-            goc_thang = 0 if months_elapsed < grace else monthly_principal
-            monthly_interest = balance * (rate / 100.0 / 12.0)
-            thang_no += (goc_thang + monthly_interest)
-            
-    tai_san = tien_mat + tiet_kiem + ccq + cp + bds + vang
-    net = tai_san - no_vay
+    df_debts = get_data('debts')
+    total_debts = pd.to_numeric(df_debts['original_principal'], errors='coerce').fillna(0).sum() if not df_debts.empty and 'original_principal' in df_debts.columns else 0
+
+    total_assets = total_cash + total_savings + total_stocks + total_gold + total_ccq + total_re
+    net_worth = total_assets - total_debts
+
     return {
-        "tien_mat": tien_mat, "tiet_kiem": tiet_kiem, "bds": bds, 
-        "ccq": ccq, "cp": cp, "vang": vang, "tai_san": tai_san, 
-        "no_vay": no_vay, "thang_no": thang_no, "net_worth": net,
-        "sum_income": sum_inc, "sum_expense": sum_exp
+        "net_worth": net_worth,
+        "assets": {
+            "Cash": total_cash,
+            "Savings": total_savings,
+            "Stocks": total_stocks,
+            "Gold": total_gold,
+            "Funds": total_ccq,
+            "Real Estate": total_re
+        },
+        "liabilities": total_debts
     }
 
-metrics = get_net_worth_data(current_member)
-tong_tien_mat = metrics["tien_mat"]
-tong_tiet_kiem = metrics["tiet_kiem"]
-bds_da_dong = metrics["bds"]
-tong_ccq = metrics["ccq"]
-tong_cp = metrics["cp"]
-tong_vang = metrics["vang"]
-tong_tai_san = metrics["tai_san"]
-no_khoan_vay = metrics["no_vay"]
-monthly_debt_total = metrics["thang_no"]
-sum_income = metrics["sum_income"]
-sum_expense = metrics["sum_expense"]
-net_worth = metrics["net_worth"]
+nw_data = calculate_net_worth(supabase, current_member)
+tong_tien_mat = nw_data['assets']['Cash']
+tong_tiet_kiem = nw_data['assets']['Savings']
+tong_cp = nw_data['assets']['Stocks']
+tong_vang = nw_data['assets']['Gold']
+tong_ccq = nw_data['assets']['Funds']
+bds_da_dong = nw_data['assets']['Real Estate']
+tong_tai_san = sum(nw_data['assets'].values())
+no_khoan_vay = nw_data['liabilities']
+net_worth = nw_data['net_worth']
+
+
+def render_net_worth_dashboard(data):
+    st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.5rem;">💰 Tổng Quan Tài Sản Ròng</div>', unsafe_allow_html=True)
+    
+    st.markdown(f"""<div class="ios-card" style="background: var(--primary-navy); border-left: 4px solid var(--accent-gold); padding: 25px; margin-bottom: 25px;">
+<div class="metric-title" style="color: var(--accent-gold);">TÀI SẢN RÒNG (NET WORTH)</div>
+<div style="font-family: 'Inter', sans-serif; font-size: 3rem; font-weight: 700; color: #f8fafc;">{data['net_worth']:,.0f} VNĐ</div>
+</div>""", unsafe_allow_html=True)
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<div class="metric-title">Phân bổ tài sản</div>', unsafe_allow_html=True)
+        import pandas as pd
+        asset_df = pd.DataFrame(data['assets'].items(), columns=['Loại', 'Giá trị'])
+        asset_df = asset_df[asset_df['Giá trị'] > 0]
+        import plotly.express as px
+        if not asset_df.empty:
+            fig = px.pie(asset_df, values='Giá trị', names='Loại', hole=0.55,
+                         color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6", "#eab308", "#ef4444"])
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
+                              legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                              margin=dict(t=10, b=10, l=10, r=10))
+            st.plotly_chart(fig, use_container_width=True)
+        
+    with col2:
+        st.markdown('<div class="metric-title">Chi tiết phân loại</div>', unsafe_allow_html=True)
+        for asset, val in data['assets'].items():
+            st.markdown(f"""
+            <div style="display:flex; justify-content:space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <span style="color:#94a3b8; font-weight:600;">{asset}</span>
+                <span style="font-weight:700;">{val:,.0f} VNĐ</span>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        st.markdown(f"""
+        <div style="display:flex; justify-content:space-between; margin-top: 20px; padding: 15px; background: rgba(239, 68, 68, 0.2); border-radius: 8px;">
+            <span style="color:#f87171; font-weight:600;">Tổng Nợ</span>
+            <span style="font-weight:700; color:#f87171;">{data['liabilities']:,.0f} VNĐ</span>
+        </div>
+        """, unsafe_allow_html=True)
+
 
 # =====================================================================
 # 9. TAB DEFINITIONS
@@ -730,122 +779,7 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 # TAB 0: TỔNG QUAN
 # =====================================================================
 with tab_home:
-    leverage_ratio = (no_khoan_vay / tong_tai_san * 100) if tong_tai_san > 0 else 0.0
-
-    # Row 1: Net Worth Dashboard component
-    net_worth_dashboard(tong_tai_san, no_khoan_vay)
-
-    # Row 1.5: Leverage Ratio Card
-    lev_color = "#10b981" if leverage_ratio <= 30 else ("#facc15" if leverage_ratio <= 50 else "#f87171")
-    st.markdown(f"""<div class="ios-card" style="margin-bottom: 20px; background: #1e293b; border-left: 4px solid {lev_color};">
-<div class="metric-title" style="color: #94a3b8;">⚖️ TỶ LỆ ĐÒN BẨY (LEVERAGE RATIO)</div>
-<div style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: {lev_color};">{leverage_ratio:.1f}%</div>
-<div style="margin-top: 5px; font-size: 0.85rem; color: #94a3b8;">
-An toàn: &lt; 30% | Cảnh báo: 30-50% | Rủi ro: &gt; 50%
-</div>
-</div>""", unsafe_allow_html=True)
-
-    # Row 2: Header + st.columns(3) in 2 clean rows to prevent truncation
-    st.markdown('<div class="metric-title" style="margin-top:10px; margin-bottom:10px;">CƠ CẤU PHÂN BỔ TÀI SẢN</div>', unsafe_allow_html=True)
-    
-    row1_m1, row1_m2, row1_m3 = st.columns(3)
-    with row1_m1: st.metric("💵 Tiền mặt", f"{tong_tien_mat:,.0f} ₫")
-    with row1_m2: st.metric("💰 Tiết kiệm", f"{tong_tiet_kiem:,.0f} ₫")
-    with row1_m3: st.metric("🏠 BĐS", f"{bds_da_dong:,.0f} ₫")
-    
-    st.markdown("<div style='margin-top:10px;'></div>", unsafe_allow_html=True)
-    
-    row2_m1, row2_m2, row2_m3 = st.columns(3)
-    with row2_m1: st.metric("📊 CCQ", f"{tong_ccq:,.0f} ₫")
-    with row2_m2: st.metric("📈 Cổ phiếu", f"{tong_cp:,.0f} ₫")
-    with row2_m3: st.metric("🥇 Vàng", f"{tong_vang:,.0f} ₫")
-
-    st.markdown("<br/>", unsafe_allow_html=True)
-
-    # Row 3: Left Donut chart, Right Financial Health
-    health_c1, health_c2 = st.columns([1, 1])
-    with health_c1:
-        st.subheader("📊 Phân bổ tài sản")
-        if tong_tai_san > 0:
-            df_chart = pd.DataFrame({
-                "Danh mục": ["Tiền mặt", "Tiết kiệm", "BĐS", "CCQ", "Cổ phiếu", "Vàng"],
-                "Giá trị": [tong_tien_mat, tong_tiet_kiem, bds_da_dong, tong_ccq, tong_cp, tong_vang]
-            })
-            df_chart = df_chart[df_chart["Giá trị"] > 0]
-            fig = px.pie(df_chart, names="Danh mục", values="Giá trị", hole=0.55,
-                         color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6", "#eab308", "#ef4444"])
-            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
-                              legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                              margin=dict(t=10, b=10, l=10, r=10))
-            fig.update_traces(textposition='inside', textinfo='percent+label')
-            st.plotly_chart(fig, use_container_width=True, key="pie_overview")
-        else:
-            st.info("Chưa có dữ liệu tài sản.")
-
-    with health_c2:
-        st.subheader("🩺 Bảng Khám Sức Khỏe Tài Chính")
-        liquid_assets = tong_tien_mat + tong_tiet_kiem
-        runway_months = (liquid_assets / sum_expense) if sum_expense > 0 else (liquid_assets / 20_000_000)
-        dti_pct = (monthly_debt_total / sum_income * 100) if sum_income > 0 else 0.0
-        
-        runway_status = "🟢 An toàn" if runway_months >= 6 else ("🟡 Trung bình" if runway_months >= 3 else "🔴 Cần bổ sung")
-        dti_status = "🟢 Tốt (<35%)" if dti_pct <= 35 else ("🟡 Chấp nhận (35-50%)" if dti_pct <= 50 else "🔴 Cao (>50%)")
-        
-        st.markdown(f"""<div class="ios-card" style="padding: 15px; margin-bottom: 10px;">
-<div style="display: flex; justify-content: space-between; align-items: center;">
-<div>
-<b>🛡️ Quỹ dự phòng (Khả dụng)</b>
-<div style="font-size: 1.3rem; font-weight: 700; color: #38bdf8;">{liquid_assets:,.0f} ₫</div>
-</div>
-<div style="text-align: right; font-size: 0.9rem; color: #94a3b8;">Tiền mặt + Tiết kiệm</div>
-</div>
-</div>
-
-<div class="ios-card" style="padding: 15px; margin-bottom: 10px;">
-<div style="display: flex; justify-content: space-between; align-items: center;">
-<div>
-<b>⏳ Runway (Số tháng chi trả)</b>
-<div style="font-size: 1.3rem; font-weight: 700; color: #4ade80;">{runway_months:.1f} tháng</div>
-</div>
-<div style="text-align: right; font-size: 0.9rem;">{runway_status}</div>
-</div>
-</div>
-
-<div class="ios-card" style="padding: 15px; margin-bottom: 10px;">
-<div style="display: flex; justify-content: space-between; align-items: center;">
-<div>
-<b>💳 Tỷ lệ Trả nợ / Thu nhập (DTI)</b>
-<div style="font-size: 1.3rem; font-weight: 700; color: #facc15;">{dti_pct:.1f}%</div>
-</div>
-<div style="text-align: right; font-size: 0.9rem;">{dti_status}</div>
-</div>
-</div>""", unsafe_allow_html=True)
-
-    # Row 4: Net Worth Trend Area Chart
-    def plot_trend(asset_val, debt_val):
-        dates = pd.date_range(end=pd.Timestamp.today(), periods=30)
-        np.random.seed(42)
-        a = np.linspace(asset_val * 0.9, asset_val, 30) + np.random.normal(0, max(asset_val * 0.01, 1), 30)
-        d = np.linspace(debt_val * 1.05, debt_val, 30) - np.random.normal(0, max(debt_val * 0.005, 1), 30)
-        df_t = pd.DataFrame({'Date': dates, 'Asset': np.maximum(a, 0), 'Debt': np.maximum(d, 0)})
-        df_t['Net'] = df_t['Asset'] - df_t['Debt']
-        fig_t = go.Figure()
-        fig_t.add_trace(go.Scatter(x=df_t['Date'], y=df_t['Debt'], mode='lines', fill='tozeroy', name='Nợ',
-                                   line=dict(color='#FF7F50', width=2), fillcolor='rgba(255,127,80,0.4)',
-                                   hovertemplate="<b>%{x|%d/%m}</b><br>Nợ: %{y:,.0f}₫<extra></extra>"))
-        fig_t.add_trace(go.Scatter(x=df_t['Date'], y=df_t['Asset'], mode='lines', fill='tonexty', name='Tài sản',
-                                   line=dict(color='#008080', width=2), fillcolor='rgba(0,128,128,0.4)',
-                                   customdata=df_t['Net'],
-                                   hovertemplate="<b>%{x|%d/%m}</b><br>TS: %{y:,.0f}₫<br>Ròng: %{customdata:,.0f}₫<extra></extra>"))
-        fig_t.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                            hovermode="x unified", margin=dict(t=30, b=10, l=0, r=0),
-                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                            title="📈 Xu hướng Tài sản & Nợ (30 ngày)", title_font=dict(family="Playfair Display", size=20))
-        fig_t.update_xaxes(showgrid=False, zeroline=False)
-        fig_t.update_yaxes(showgrid=False, zeroline=False)
-        return fig_t
-
-    st.plotly_chart(plot_trend(tong_tai_san, no_khoan_vay), use_container_width=True, key="trend_chart")
+    render_net_worth_dashboard(nw_data)
 
 # =====================================================================
 # TAB 1: DÒNG TIỀN
