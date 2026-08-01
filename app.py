@@ -6,6 +6,40 @@ import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
 import calendar
+from dateutil.relativedelta import relativedelta
+
+def calculate_amortization_schedule(principal, annual_rate, total_months, grace_period_months, start_dt, pay_day):
+    schedule = []
+    balance = principal
+    effective_months = max(1, total_months - grace_period_months)
+    monthly_principal = principal / effective_months if effective_months > 0 else 0
+    monthly_rate = annual_rate / 100.0 / 12.0
+    
+    current_dt = pd.to_datetime(start_dt)
+    for i in range(1, total_months + 1):
+        current_dt = current_dt + relativedelta(months=1)
+        max_d = calendar.monthrange(current_dt.year, current_dt.month)[1]
+        p_day = min(pay_day, max_d)
+        payment_date = datetime(current_dt.year, current_dt.month, p_day).date()
+        
+        interest_payment = balance * monthly_rate
+        if i <= grace_period_months:
+            principal_payment = 0
+        else:
+            principal_payment = monthly_principal
+            
+        total_payment = principal_payment + interest_payment
+        balance = max(0, balance - principal_payment)
+        
+        schedule.append({
+            "Kỳ": i,
+            "Ngày TT": payment_date.strftime('%d/%m/%Y'),
+            "Gốc phải trả": principal_payment,
+            "Lãi phải trả": interest_payment,
+            "Tổng phải trả": total_payment,
+            "Dư nợ còn lại": balance
+        })
+    return pd.DataFrame(schedule)
 import streamlit_antd_components as sac
 from supabase import create_client, Client
 from components.ui import load_css, net_worth_dashboard
@@ -1375,55 +1409,148 @@ with tab_realestate:
 
     # --- REAL ESTATE ---
     
-    # RE Due Date Alert
+    # Calculate Total Outstanding Debt for LTV
+    df_debts_f = filter_by_member(df_debts, current_member)
+    current_total_debt = 0
+    today_dt = pd.to_datetime(date.today())
+    if not df_debts_f.empty:
+        for _, row in df_debts_f.iterrows():
+            principal = safe_float(row.get('original_principal'))
+            months = int(safe_float(row.get('total_months')))
+            grace = int(safe_float(row.get('grace_period')))
+            pay_day = int(safe_float(row.get('payment_day', 5)))
+            start_dt = pd.to_datetime(row.get('start_date'), errors='coerce')
+            if pd.isna(start_dt) or start_dt is pd.NaT: continue
+            
+            months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
+            if today_dt.day < pay_day: months_diff -= 1
+            months_elapsed = max(0, min(months_diff, months))
+            effective_months = max(1, months - grace)
+            monthly_principal = principal / effective_months
+            balance = max(0, principal - (monthly_principal * max(0, months_elapsed - grace)))
+            current_total_debt += balance
+            
+    # Calculate Total RE Contract Value for LTV
+    df_re_f = df_re.copy()
+    current_total_re_value = 0
+    if not df_re_f.empty:
+        current_total_re_value = df_re_f.groupby('project_name')['contract_value'].first().sum()
+
+    # Smart Alerts (Real Estate & Debts)
+    alerts = []
+    
+    # RE Alerts
     if not df_re.empty and 'status' in df_re.columns and 'due_date' in df_re.columns:
         unpaid = df_re[df_re['status'].astype(str).str.strip() == 'Chưa thanh toán'].copy()
         if not unpaid.empty:
             today_date = date.today()
             unpaid['due_date_dt'] = pd.to_datetime(unpaid['due_date'], errors='coerce').dt.date
-            upcoming = unpaid[(unpaid['due_date_dt'] >= today_date) & (unpaid['due_date_dt'] <= today_date + pd.Timedelta(days=14))]
+            upcoming = unpaid[(unpaid['due_date_dt'] >= today_date) & (unpaid['due_date_dt'] <= today_date + pd.Timedelta(days=7))]
             for _, r in upcoming.iterrows():
                 days_left = (r['due_date_dt'] - today_date).days
-                if days_left <= 7:
-                    st.error(f"🚨 **Khẩn cấp:** BĐS **{r.get('project_name','')} - {r.get('installment_name','')}** cần thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** trong **{days_left} ngày** tới!")
-                else:
-                    st.warning(f"⚠️ **Sắp đến hạn:** BĐS **{r.get('project_name','')} - {r.get('installment_name','')}** cần thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** trong **{days_left} ngày** tới.")
+                alerts.append(f"🏠 **BĐS {r.get('project_name','')} - {r.get('installment_name','')}**: Thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** (Còn {days_left} ngày)")
+
+    # Debt Alerts
+    if not df_debts_f.empty:
+        for _, row in df_debts_f.iterrows():
+            pay_day = int(safe_float(row.get('payment_day', 5)))
+            next_m = today_dt.month + (1 if today_dt.day > pay_day else 0)
+            next_y = today_dt.year
+            if next_m > 12: next_m = 1; next_y += 1
+            max_d = calendar.monthrange(next_y, next_m)[1]
+            safe_day = min(pay_day, max_d)
+            next_pay = datetime(next_y, next_m, safe_day).date()
+            days_left = (next_pay - today_dt.date()).days
+            if 0 <= days_left <= 7:
+                alerts.append(f"🏦 **Khoản vay {row.get('bank', '')}**: Trả nợ định kỳ (Còn {days_left} ngày)")
+
+    if alerts:
+        with st.container():
+            st.markdown('<div style="padding: 15px; background: rgba(239, 68, 68, 0.1); border-left: 4px solid #ef4444; border-radius: 8px; margin-bottom: 20px;">', unsafe_allow_html=True)
+            st.markdown('<h4 style="color: #ef4444; margin-bottom: 10px;">🚨 THÔNG BÁO QUAN TRỌNG</h4>', unsafe_allow_html=True)
+            for alert in alerts:
+                st.markdown(f"- {alert}")
+            st.markdown('</div>', unsafe_allow_html=True)
 
     st.subheader("🏠 Bất động sản đang sở hữu")
-    df_re_f = df_re.copy()
     if not df_re_f.empty:
-        total_contract = df_re_f.groupby('project_name')['contract_value'].first().sum()
+        total_contract = current_total_re_value
         total_paid = df_re_f[df_re_f['status'].astype(str).str.strip() == 'Đã thanh toán']['amount'].sum()
         total_unpaid = df_re_f[df_re_f['status'].astype(str).str.strip() == 'Chưa thanh toán']['amount'].sum()
 
-        rm1, rm2, rm3 = st.columns(3)
+        ltv = (current_total_debt / total_contract * 100) if total_contract > 0 else 0
+        ltv_color = "#4ade80"
+        if ltv > 70: ltv_color = "#ef4444"
+        elif ltv >= 50: ltv_color = "#f59e0b"
+
+        rm1, rm2, rm3, rm4 = st.columns(4)
         with rm1:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #38bdf8;">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Giá Trị Hợp Đồng</div>'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Hợp Đồng</div>'
                         f'<div style="font-size:1.5rem; font-weight:700;">{total_contract:,.0f} ₫</div></div>', unsafe_allow_html=True)
         with rm2:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #4ade80;">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Đã Thanh Toán</div>'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">Đã Thanh Toán</div>'
                         f'<div style="font-size:1.5rem; font-weight:700; color:#4ade80;">{total_paid:,.0f} ₫</div></div>', unsafe_allow_html=True)
         with rm3:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #f87171;">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Chưa Thanh Toán</div>'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">Chưa Thanh Toán</div>'
                         f'<div style="font-size:1.5rem; font-weight:700; color:#f87171;">{total_unpaid:,.0f} ₫</div></div>', unsafe_allow_html=True)
+        with rm4:
+            st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid {ltv_color};">'
+                        f'<div style="font-size:0.9rem; color:#94a3b8;">LTV (Nợ / BĐS)</div>'
+                        f'<div style="font-size:1.5rem; font-weight:700; color:{ltv_color};">{ltv:.1f}%</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br/>", unsafe_allow_html=True)
 
-        display_cols = [c for c in ['project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note'] if c in df_re_f.columns]
-        df_display = df_re_f[display_cols].copy()
+        st.markdown("#### 🗺️ Tiến độ thanh toán (Roadmap)")
+        # Sort by project_name and due_date
+        df_re_sorted = df_re_f.copy()
+        df_re_sorted['due_date_dt'] = pd.to_datetime(df_re_sorted['due_date'], errors='coerce')
+        df_re_sorted = df_re_sorted.sort_values(['project_name', 'due_date_dt'])
         
-        # Format for dataframe
-        df_display['Dự án'] = df_display['project_name']
-        df_display['Đợt'] = df_display['installment_name']
-        df_display['Số tiền'] = pd.to_numeric(df_display['amount'], errors='coerce').apply(lambda x: f"{x:,.0f}")
-        df_display['Hạn TT'] = pd.to_datetime(df_display['due_date']).dt.strftime('%d/%m/%Y')
-        df_display['Nguồn'] = df_display['funding_source']
-        df_display['Trạng thái'] = df_display['status']
-        
-        st.dataframe(df_display[['Dự án', 'Đợt', 'Số tiền', 'Hạn TT', 'Nguồn', 'Trạng thái']], use_container_width=True, hide_index=True)
+        projects = df_re_sorted['project_name'].unique()
+        for proj in projects:
+            st.markdown(f"**{proj}**")
+            proj_data = df_re_sorted[df_re_sorted['project_name'] == proj]
+            
+            # Find the first unpaid installment (the "current" one)
+            first_unpaid_idx = -1
+            for i, (_, r) in enumerate(proj_data.iterrows()):
+                if str(r.get('status', '')).strip() == 'Chưa thanh toán':
+                    first_unpaid_idx = i
+                    break
+                    
+            timeline_html = "<div style='margin-left: 10px; border-left: 2px solid #334155; padding-left: 15px; padding-top: 10px; padding-bottom: 10px;'>"
+            for i, (_, r) in enumerate(proj_data.iterrows()):
+                stat = str(r.get('status', '')).strip()
+                amt = safe_float(r.get('amount', 0))
+                dt_str = pd.to_datetime(r.get('due_date')).strftime('%d/%m/%Y') if pd.notna(r.get('due_date')) else ''
+                inst = r.get('installment_name', '')
+                
+                if stat == 'Đã thanh toán':
+                    icon = "✅"
+                    color = "#4ade80"
+                    opacity = "0.7"
+                elif i == first_unpaid_idx:
+                    icon = "⏳"
+                    color = "#f59e0b"
+                    opacity = "1.0"
+                else:
+                    icon = "⚪"
+                    color = "#94a3b8"
+                    opacity = "0.5"
+                
+                timeline_html += f'''
+                <div style="position: relative; margin-bottom: 15px; opacity: {opacity};">
+                    <span style="position: absolute; left: -25px; background: #0f172a; padding: 2px;">{icon}</span>
+                    <div style="font-weight: 600; color: {color};">{inst} - {amt:,.0f} ₫</div>
+                    <div style="font-size: 0.85rem; color: #94a3b8;">Hạn TT: {dt_str}</div>
+                </div>
+                '''
+            timeline_html += "</div>"
+            st.markdown(timeline_html, unsafe_allow_html=True)
+            st.markdown("<hr style='opacity:0.2;'/>", unsafe_allow_html=True)
 
         with st.expander("⚙️ Quản lý & Chỉnh sửa BĐS", expanded=False):
             options_re = [f"{r.get('project_name', 'BĐS')} | {r.get('installment_name', '')} | {safe_float(r.get('amount', 0)):,.0f}₫ ({r.get('status','')})" for _, r in df_re_f.iterrows()]
@@ -1519,12 +1646,13 @@ with tab_realestate:
                 prog_color = row["progress_color"]
                 days = row["days_to_pay"]
                 
+                paid = orig - bal
                 st.markdown(f'''
-                <div class="fintech-card">
+                <div class="fintech-card" style="padding-bottom: 5px;">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div style="flex: 1;">
                             <div class="fintech-card-title">🏦 {bank} - {purp}</div>
-                            <div class="fintech-card-subtitle">Gốc/Tháng: {goc_t:,.0f} ₫ • Lãi: {lai_t:,.0f} ₫</div>
+                            <div class="fintech-card-subtitle">Gốc/Tháng: {goc_t:,.0f} ₫ • Lãi/Tháng: {lai_t:,.0f} ₫</div>
                             <div class="fintech-card-subtitle" style="color: {color_warn}; margin-top: 4px;">⏳ Trả nợ kỳ tới: {nxt} ({days} ngày nữa)</div>
                         </div>
                         <div style="text-align: right;">
@@ -1535,24 +1663,93 @@ with tab_realestate:
                             <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">/ {orig:,.0f} ₫</div>
                         </div>
                     </div>
-                    <div class="progress-container" style="margin-top:12px;background-color:rgba(255,255,255,0.1);">
-                        <div class="progress-bar-fill" style="width:{min(pct,100)}%;background-color:{prog_color};"></div>
-                    </div>
                 </div>
                 ''', unsafe_allow_html=True)
+                
+                # Plotly Chart for Amortization
+                import plotly.graph_objects as go
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    y=[purp], x=[paid], name='Đã trả', orientation='h', marker=dict(color='#4ade80')
+                ))
+                fig.add_trace(go.Bar(
+                    y=[purp], x=[bal], name='Còn lại', orientation='h', marker=dict(color='#f87171')
+                ))
+                fig.update_layout(
+                    barmode='stack', margin=dict(l=0, r=0, t=10, b=0), height=50,
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
+                    showlegend=False,
+                    xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
+                    yaxis=dict(showticklabels=False, showgrid=False, zeroline=False)
+                )
+                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
         st.metric("💳 Tổng dư nợ hiện tại", f"{no_khoan_vay:,.0f} ₫")
 
+        st.markdown("### 📊 Chi tiết Khoản vay & Lịch trả nợ")
+        options_debt = [f"{r.get('purpose', 'Khoản vay')} | {r.get('bank', '')} | Gốc: {safe_float(r.get('original_principal')):,.0f}₫" for _, r in df_debts_f.iterrows()]
+        sel_debt_idx = st.selectbox("Chọn khoản vay để xem chi tiết", range(len(options_debt)), format_func=lambda i: options_debt[i], key="sel_debt_details")
+        
+        selected_debt = df_debts_f.iloc[sel_debt_idx]
+        
+        prin = safe_float(selected_debt.get('original_principal'))
+        arate = safe_float(selected_debt.get('interest_rate'))
+        tm = int(safe_float(selected_debt.get('total_months')))
+        grace = int(safe_float(selected_debt.get('grace_period')))
+        pday = int(safe_float(selected_debt.get('payment_day', 5)))
+        sdt = pd.to_datetime(selected_debt.get('start_date'), errors='coerce')
+        
+        if pd.notna(sdt):
+            df_sched = calculate_amortization_schedule(prin, arate, tm, grace, sdt, pday)
+            
+            total_interest = df_sched['Lãi phải trả'].sum()
+            first_month_payment = df_sched.iloc[0]['Tổng phải trả'] if not df_sched.empty else 0
+            
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric("Tổng gốc", f"{prin:,.0f} ₫")
+            mc2.metric("Tổng lãi dự kiến", f"{total_interest:,.0f} ₫")
+            mc3.metric("Thanh toán kỳ đầu", f"{first_month_payment:,.0f} ₫")
+            
+            fig_sched = px.bar(
+                df_sched, 
+                x="Kỳ", 
+                y=["Gốc phải trả", "Lãi phải trả"], 
+                title="Cơ cấu Gốc & Lãi theo thời gian",
+                color_discrete_map={"Gốc phải trả": "#4ade80", "Lãi phải trả": "#f59e0b"}
+            )
+            fig_sched.update_layout(
+                barmode='stack', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
+                legend_title_text="", xaxis_title="Kỳ thanh toán", yaxis_title="Số tiền (VND)"
+            )
+            st.plotly_chart(fig_sched, use_container_width=True)
+            
+            df_sched_display = df_sched.copy()
+            for c in ["Gốc phải trả", "Lãi phải trả", "Tổng phải trả", "Dư nợ còn lại"]:
+                df_sched_display[c] = df_sched_display[c].apply(lambda x: f"{x:,.0f}")
+            
+            st.dataframe(df_sched_display, use_container_width=True, hide_index=True)
+            
+            today_dt = pd.to_datetime(date.today())
+            
+            # Simple Warning Logic inside interactive
+            next_sched = df_sched[df_sched['Dư nợ còn lại'].round(0) >= 0]
+            # find next schedule where date is >= today
+            next_sched['Ngày TT dt'] = pd.to_datetime(next_sched['Ngày TT'], format='%d/%m/%Y')
+            next_sched = next_sched[next_sched['Ngày TT dt'].dt.date >= today_dt.date()]
+            if not next_sched.empty:
+                next_pay = next_sched.iloc[0]
+                days_to_pay = (next_pay['Ngày TT dt'].date() - today_dt.date()).days
+                if 0 <= days_to_pay <= 7:
+                    st.warning(f"⚠️ Nhắc nhở: Bạn có khoản thanh toán **{safe_float(next_pay['Tổng phải trả']):,.0f} ₫** vào ngày **{next_pay['Ngày TT']}** (Còn {days_to_pay} ngày).")
+        
         with st.expander("⚙️ Quản lý & Chỉnh sửa Khoản Vay", expanded=False):
-            options_debt = [f"{r.get('purpose', 'Khoản vay')} | {r.get('bank', '')} | Gốc: {safe_float(r.get('original_principal')):,.0f}₫" for _, r in df_debts_f.iterrows()]
-            sel_debt = st.selectbox("Chọn khoản vay để sửa/xóa", range(len(options_debt)), format_func=lambda i: options_debt[i], key="sel_debt")
             de1, de2 = st.columns(2)
             with de1:
                 if st.button("✏️ SỬA KHOẢN VAY", key="btn_edit_debt", use_container_width=True):
-                    st.session_state.editing_debt = df_debts_f.iloc[sel_debt].to_dict()
+                    st.session_state.editing_debt = selected_debt.to_dict()
             with de2:
                 if st.button("❌ XÓA KHOẢN VAY", key="btn_del_debt", use_container_width=True):
-                    supabase.table("debts").delete().eq("id", df_debts_f.iloc[sel_debt]['id']).execute()
+                    supabase.table("debts").delete().eq("id", selected_debt['id']).execute()
                     st.toast("🗑️ Đã xóa!", icon="✅")
                     clear_cache_and_rerun()
         if st.session_state.get("editing_debt"):
