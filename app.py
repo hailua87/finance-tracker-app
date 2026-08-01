@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 from datetime import date, datetime
 import time
 import plotly.express as px
@@ -108,7 +107,6 @@ FUND_THEME_MAP = {"Tieu Boi Funding": "card-baby", "Daddy Funding": "card-daddy"
 
 
 def calc_investment_total(df, group_col):
-    import pandas as pd
     if df.empty or group_col not in df.columns:
         return pd.DataFrame(), 0
     summary_list = []
@@ -275,7 +273,6 @@ def modal_cashflow():
         account = st.selectbox("Tài khoản", BANK_ACCOUNTS, index=_ai, key="cf_acc")
         
     try:
-        import pandas as pd
         df_ob_loc = fetch_table("opening_balances")
         df_cf_loc = fetch_table("cashflow")
         ob_val = 0.0
@@ -846,7 +843,6 @@ def calculate_net_worth(supabase_client, fund_owner=None):
     Tính toán tổng tài sản ròng dựa trên tất cả các bảng trong Supabase.
     Có hỗ trợ lọc theo fund_owner (Daddy, Mommy, Baby).
     """
-    import pandas as pd
     
     def get_data(table_name):
         query = supabase_client.table(table_name).select("*")
@@ -1059,7 +1055,6 @@ def render_net_worth_dashboard(data, df_cf, current_member):
         col1, col2 = st.columns(2)
         with col1:
             st.markdown('<div class="metric-title">Phân bổ tài sản</div>', unsafe_allow_html=True)
-            import pandas as pd
             asset_df = pd.DataFrame(data['assets'].items(), columns=['Loại', 'Giá trị'])
             asset_df = asset_df[asset_df['Giá trị'] > 0]
             import plotly.express as px
@@ -1120,6 +1115,13 @@ with tab_cashflow:
         fc1, fc2 = st.columns(2)
         with fc1: d_start = st.date_input("Từ ngày", month_start, key="cf_d1")
         with fc2: d_end = st.date_input("Đến ngày", today, key="cf_d2")
+        
+        # Ensure the column is datetime before applying .dt
+        df_cf_f['created_at'] = pd.to_datetime(df_cf_f['created_at'], errors='coerce')
+        
+        # Drop NaT values to prevent comparison errors
+        df_cf_f = df_cf_f.dropna(subset=['created_at'])
+        
         mask = (df_cf_f['created_at'].dt.date >= d_start) & (df_cf_f['created_at'].dt.date <= d_end)
         df_period = df_cf_f[mask].copy()
     else:
