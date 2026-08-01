@@ -15,6 +15,30 @@ from components.ui import load_css, net_worth_dashboard
 # =====================================================================
 st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", page_icon="💰", layout="wide", initial_sidebar_state="expanded")
 
+# --- BẢO MẬT BẰNG MẬT KHẨU ---
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "123456"):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔒 Đăng nhập hệ thống</h2>", unsafe_allow_html=True)
+        st.text_input("Nhập mật khẩu để truy cập:", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.markdown("<h2 style='text-align: center; margin-top: 50px;'>🔒 Đăng nhập hệ thống</h2>", unsafe_allow_html=True)
+        st.text_input("Nhập mật khẩu để truy cập:", type="password", on_change=password_entered, key="password")
+        st.error("😕 Mật khẩu không đúng")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+
+
 @st.cache_resource
 def init_supabase() -> Client:
     return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
@@ -139,21 +163,36 @@ def calc_investment_total(df, group_col, vol_col='volume'):
     if df.empty or group_col not in df.columns:
         return pd.DataFrame(), 0
     df = df.copy()
-    df[vol_col] = pd.to_numeric(df[vol_col], errors='coerce').fillna(0)
+    
+    # Handle volume vs quantity dynamically
+    actual_vol_col = vol_col if vol_col in df.columns else 'quantity'
+    if actual_vol_col not in df.columns:
+        return pd.DataFrame(), 0
+        
+    df[actual_vol_col] = pd.to_numeric(df[actual_vol_col], errors='coerce').fillna(0)
     df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0)
-    rows, total = [], 0
+    
+    summary_list = []
+    total_val = 0
     for name, grp in df.groupby(group_col):
-        buys = grp[grp['action'].astype(str).str.contains('Mua', na=False, case=False)]
-        sells = grp[grp['action'].astype(str).str.contains('Bán', na=False, case=False)]
-        net = buys[vol_col].sum() - sells[vol_col].sum()
-        if net > 0:
-            bv = (buys[vol_col] * buys['price']).sum()
-            bvol = buys[vol_col].sum()
-            avg = bv / bvol if bvol > 0 else 0
-            val = net * avg
-            total += val
-            rows.append({"Tài sản": name, "SL nắm giữ": net, "Giá vốn TB": avg, "Giá trị": val})
-    return pd.DataFrame(rows), total
+        # Robust Buy/Sell regex matching as requested
+        buy_rows = grp[grp['action'].astype(str).str.lower().str.contains('buy|mua', na=False)]
+        sell_rows = grp[grp['action'].astype(str).str.lower().str.contains('sell|bán', na=False)]
+        
+        buy_vol = buy_rows[actual_vol_col].sum()
+        sell_vol = sell_rows[actual_vol_col].sum()
+        net_vol = buy_vol - sell_vol
+        
+        buy_val = (buy_rows[actual_vol_col] * buy_rows['price']).sum()
+        avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+        
+        cost = net_vol * avg_price
+        if net_vol > 0:
+            # Maintaining dictionary keys compatible with the existing Fintech UI cards
+            summary_list.append({"Tài sản": name, "SL nắm giữ": net_vol, "Giá vốn TB": avg_price, "Giá trị": cost})
+            total_val += cost
+            
+    return pd.DataFrame(summary_list), total_val
 
 # =====================================================================
 # 5. SIDEBAR
