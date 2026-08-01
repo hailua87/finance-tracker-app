@@ -582,69 +582,92 @@ df_ob = fetch_table("opening_balances")
 # =====================================================================
 # METRIC PRE-COMPUTATION FOR ACCURACY & TABS
 # =====================================================================
+def get_net_worth_data(member):
+    """Tính toán tất cả các chỉ số tài sản và nợ dựa trên thành viên (BA Logic)."""
+    # 1. CASH (TIỀN MẶT)
+    target_accounts = DEBIT_ACCOUNTS + BROKER_ACCOUNTS
+    df_ob_target = df_ob[df_ob['account'].isin(target_accounts)] if not df_ob.empty and 'account' in df_ob.columns else pd.DataFrame()
+    df_ob_f = filter_by_member(df_ob_target, member, col='account')
+    col_ob = 'balance' if 'balance' in df_ob_f.columns else ('amount' if 'amount' in df_ob_f.columns else None)
+    sum_ob = pd.to_numeric(df_ob_f[col_ob], errors='coerce').fillna(0).sum() if (not df_ob_f.empty and col_ob) else 0.0
 
-# 1. CASH (TIỀN MẶT): Opening balances (DEBIT + BROKER) + Income - Expenses
-target_accounts = DEBIT_ACCOUNTS + BROKER_ACCOUNTS
-df_ob_target = df_ob[df_ob['account'].isin(target_accounts)] if not df_ob.empty and 'account' in df_ob.columns else pd.DataFrame()
-df_ob_f = filter_by_member(df_ob_target, current_member, col='account')
-col_ob = 'balance' if 'balance' in df_ob_f.columns else ('amount' if 'amount' in df_ob_f.columns else None)
-sum_ob = pd.to_numeric(df_ob_f[col_ob], errors='coerce').fillna(0).sum() if (not df_ob_f.empty and col_ob) else 0.0
+    df_cf_f_cash = filter_by_member(df_cf, member, col='account')
+    sum_inc, sum_exp = 0.0, 0.0
+    if not df_cf_f_cash.empty and 'category' in df_cf_f_cash.columns and 'amount' in df_cf_f_cash.columns:
+        df_cf_f_cash['amount_num'] = pd.to_numeric(df_cf_f_cash['amount'], errors='coerce').fillna(0)
+        sum_inc = df_cf_f_cash[df_cf_f_cash['category'] == 'Lương/Thu nhập']['amount_num'].sum()
+        sum_exp = df_cf_f_cash[df_cf_f_cash['category'] != 'Lương/Thu nhập']['amount_num'].sum()
+    tien_mat = sum_ob + sum_inc - sum_exp
 
-df_cf_f_cash = filter_by_member(df_cf, current_member, col='account')
-sum_income, sum_expense = 0.0, 0.0
-if not df_cf_f_cash.empty and 'category' in df_cf_f_cash.columns and 'amount' in df_cf_f_cash.columns:
-    df_cf_f_cash['amount_num'] = pd.to_numeric(df_cf_f_cash['amount'], errors='coerce').fillna(0)
-    sum_income = df_cf_f_cash[df_cf_f_cash['category'] == 'Lương/Thu nhập']['amount_num'].sum()
-    sum_expense = df_cf_f_cash[df_cf_f_cash['category'] != 'Lương/Thu nhập']['amount_num'].sum()
+    # 2. REAL ESTATE (BĐS)
+    bds = 0.0
+    if not df_re.empty and 'amount' in df_re.columns:
+        df_re_paid = df_re[df_re['status'].astype(str).str.strip() == 'Đã thanh toán'] if 'status' in df_re.columns else df_re
+        bds = pd.to_numeric(df_re_paid['amount'], errors='coerce').fillna(0).sum()
 
-tong_tien_mat = sum_ob + sum_income - sum_expense
+    # 3. INVESTMENTS (STOCKS, CCQ, GOLD)
+    df_stk_f = filter_by_member(df_stk, member)
+    _, cp = calc_investment_total(df_stk_f, 'ticker')
 
-# 2. REAL ESTATE (BĐS): Sum of 'amount' column WHERE status == 'Đã thanh toán'
-bds_da_dong = 0.0
-if not df_re.empty and 'amount' in df_re.columns:
-    df_re_paid = df_re[df_re['status'].astype(str).str.strip() == 'Đã thanh toán'] if 'status' in df_re.columns else df_re
-    bds_da_dong = pd.to_numeric(df_re_paid['amount'], errors='coerce').fillna(0).sum()
+    df_ccq_f = filter_by_member(df_ccq, member)
+    _, ccq = calc_investment_total(df_ccq_f, 'ticker')
 
-# 3. INVESTMENTS (STOCKS, CCQ, GOLD)
-df_stk_f = filter_by_member(df_stk, current_member)
-_, tong_cp = calc_investment_total(df_stk_f, 'ticker')
+    df_gold_f = filter_by_member(df_gold, member)
+    _, vang = calc_investment_total(df_gold_f, 'gold_type', vol_col='quantity')
 
-df_ccq_f = filter_by_member(df_ccq, current_member)
-_, tong_ccq = calc_investment_total(df_ccq_f, 'ticker')
+    # 4. SAVINGS (TIẾT KIỆM)
+    df_savings_f = filter_by_member(df_savings, member, col='fund_owner')
+    tiet_kiem = pd.to_numeric(df_savings_f['amount'], errors='coerce').fillna(0).sum() if not df_savings_f.empty and 'amount' in df_savings_f.columns else 0.0
 
-df_gold_f = filter_by_member(df_gold, current_member)
-_, tong_vang = calc_investment_total(df_gold_f, 'gold_type', vol_col='quantity')
+    # 5. DEBTS (NỢ)
+    no_vay = 0.0
+    thang_no = 0.0
+    df_debts_f = filter_by_member(df_debts, member)
+    if not df_debts_f.empty:
+        today_dt = pd.to_datetime(date.today())
+        for _, row in df_debts_f.iterrows():
+            principal = safe_float(row.get('original_principal'))
+            rate = safe_float(row.get('interest_rate'))
+            months = int(safe_float(row.get('total_months')))
+            grace = int(safe_float(row.get('grace_period')))
+            pay_day = int(safe_float(row.get('payment_day', 5)))
+            start_dt = pd.to_datetime(row.get('start_date'), errors='coerce')
+            if pd.isna(start_dt) or start_dt is pd.NaT:
+                continue
+            months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
+            if today_dt.day < pay_day:
+                months_diff -= 1
+            months_elapsed = max(0, min(months_diff, months))
+            effective_months = max(1, months - grace)
+            monthly_principal = principal / effective_months
+            balance = max(0, principal - (monthly_principal * max(0, months_elapsed - grace)))
+            no_vay += balance
+            goc_thang = 0 if months_elapsed < grace else monthly_principal
+            monthly_interest = balance * (rate / 100.0 / 12.0)
+            thang_no += (goc_thang + monthly_interest)
+            
+    tai_san = tien_mat + tiet_kiem + ccq + cp + bds + vang
+    net = tai_san - no_vay
+    return {
+        "tien_mat": tien_mat, "tiet_kiem": tiet_kiem, "bds": bds, 
+        "ccq": ccq, "cp": cp, "vang": vang, "tai_san": tai_san, 
+        "no_vay": no_vay, "thang_no": thang_no, "net_worth": net,
+        "sum_income": sum_inc, "sum_expense": sum_exp
+    }
 
-# 4. SAVINGS (TIẾT KIỆM)
-df_savings_f = filter_by_member(df_savings, current_member, col='fund_owner')
-tong_tiet_kiem = pd.to_numeric(df_savings_f['amount'], errors='coerce').fillna(0).sum() if not df_savings_f.empty and 'amount' in df_savings_f.columns else 0.0
-
-# 5. DEBTS (NỢ)
-no_khoan_vay = 0.0
-monthly_debt_total = 0.0
-df_debts_f = filter_by_member(df_debts, current_member)
-if not df_debts_f.empty:
-    today_dt = pd.to_datetime(date.today())
-    for _, row in df_debts_f.iterrows():
-        principal = safe_float(row.get('original_principal'))
-        rate = safe_float(row.get('interest_rate'))
-        months = int(safe_float(row.get('total_months')))
-        grace = int(safe_float(row.get('grace_period')))
-        pay_day = int(safe_float(row.get('payment_day', 5)))
-        start_dt = pd.to_datetime(row.get('start_date'), errors='coerce')
-        if pd.isna(start_dt) or start_dt is pd.NaT:
-            continue
-        months_diff = (today_dt.year - start_dt.year) * 12 + (today_dt.month - start_dt.month)
-        if today_dt.day < pay_day:
-            months_diff -= 1
-        months_elapsed = max(0, min(months_diff, months))
-        effective_months = max(1, months - grace)
-        monthly_principal = principal / effective_months
-        balance = max(0, principal - (monthly_principal * max(0, months_elapsed - grace)))
-        no_khoan_vay += balance
-        goc_thang = 0 if months_elapsed < grace else monthly_principal
-        monthly_interest = balance * (rate / 100.0 / 12.0)
-        monthly_debt_total += (goc_thang + monthly_interest)
+metrics = get_net_worth_data(current_member)
+tong_tien_mat = metrics["tien_mat"]
+tong_tiet_kiem = metrics["tiet_kiem"]
+bds_da_dong = metrics["bds"]
+tong_ccq = metrics["ccq"]
+tong_cp = metrics["cp"]
+tong_vang = metrics["vang"]
+tong_tai_san = metrics["tai_san"]
+no_khoan_vay = metrics["no_vay"]
+monthly_debt_total = metrics["thang_no"]
+sum_income = metrics["sum_income"]
+sum_expense = metrics["sum_expense"]
+net_worth = metrics["net_worth"]
 
 # =====================================================================
 # 9. TAB DEFINITIONS
@@ -657,34 +680,23 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 # TAB 0: TỔNG QUAN
 # =====================================================================
 with tab_home:
-    tong_tai_san = tong_tien_mat + tong_tiet_kiem + tong_ccq + tong_cp + bds_da_dong + tong_vang
-    net_worth = tong_tai_san - no_khoan_vay
     leverage_ratio = (no_khoan_vay / tong_tai_san * 100) if tong_tai_san > 0 else 0.0
 
-    # Row 1: Two large custom CSS cards
-    r1_c1, r1_c2 = st.columns(2)
-    with r1_c1:
-        st.markdown(f"""<div class="ios-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 20px;">
-<div class="metric-title" style="color: #94a3b8;">💎 TÀI SẢN RÒNG (NET WORTH)</div>
-<div style="font-family: 'Playfair Display'; font-size: 2.5rem; font-weight: 700; color: #4ECDC4;">{net_worth:,.0f} ₫</div>
-<div style="display: flex; gap: 20px; margin-top: 10px; font-size: 0.9rem;">
-<span style="color: #10b981;"><b>Tài sản:</b> +{tong_tai_san:,.0f} ₫</span>
-<span style="color: #ef4444;"><b>Nợ:</b> -{no_khoan_vay:,.0f} ₫</span>
-</div>
-</div>""", unsafe_allow_html=True)
+    # Row 1: Net Worth Dashboard component
+    net_worth_dashboard(tong_tai_san, no_khoan_vay)
 
-    with r1_c2:
-        lev_color = "#10b981" if leverage_ratio <= 30 else ("#facc15" if leverage_ratio <= 50 else "#f87171")
-        st.markdown(f"""<div class="ios-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 20px;">
+    # Row 1.5: Leverage Ratio Card
+    lev_color = "#10b981" if leverage_ratio <= 30 else ("#facc15" if leverage_ratio <= 50 else "#f87171")
+    st.markdown(f"""<div class="ios-card" style="margin-bottom: 20px; background: #1e293b; border-left: 4px solid {lev_color};">
 <div class="metric-title" style="color: #94a3b8;">⚖️ TỶ LỆ ĐÒN BẨY (LEVERAGE RATIO)</div>
-<div style="font-family: 'Playfair Display'; font-size: 2.5rem; font-weight: 700; color: {lev_color};">{leverage_ratio:.1f}%</div>
-<div style="margin-top: 10px; font-size: 0.9rem; color: #94a3b8;">
+<div style="font-family: 'Playfair Display'; font-size: 2rem; font-weight: 700; color: {lev_color};">{leverage_ratio:.1f}%</div>
+<div style="margin-top: 5px; font-size: 0.85rem; color: #94a3b8;">
 An toàn: &lt; 30% | Cảnh báo: 30-50% | Rủi ro: &gt; 50%
 </div>
 </div>""", unsafe_allow_html=True)
 
     # Row 2: Header + st.columns(3) in 2 clean rows to prevent truncation
-    st.markdown('<div class="metric-title" style="margin-top:20px; margin-bottom:10px;">CƠ CẤU PHÂN BỔ TÀI SẢN</div>', unsafe_allow_html=True)
+    st.markdown('<div class="metric-title" style="margin-top:10px; margin-bottom:10px;">CƠ CẤU PHÂN BỔ TÀI SẢN</div>', unsafe_allow_html=True)
     
     row1_m1, row1_m2, row1_m3 = st.columns(3)
     with row1_m1: st.metric("💵 Tiền mặt", f"{tong_tien_mat:,.0f} ₫")
