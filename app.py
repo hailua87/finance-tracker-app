@@ -31,17 +31,17 @@ if "last_account" not in st.session_state:
 if "cf_amount_str" not in st.session_state:
     st.session_state.cf_amount_str = ""
 
-# KHỞI TẠO NGÂN SÁCH THEO HẠNG MỤC (Tư duy 50/30/20 cho Gia đình trẻ)
+# KHỞI TẠO NGÂN SÁCH THEO HẠNG MỤC
 if "cat_budgets" not in st.session_state:
     st.session_state.cat_budgets = {
-        "Ăn uống & Sinh hoạt": 8000000,     # Thiết yếu
-        "Nhà cửa & Tiện ích": 3000000,      # Thiết yếu
-        "Giáo dục (Con cái)": 3000000,      # Thiết yếu
-        "Đi lại & Phương tiện": 1500000,    # Thiết yếu
-        "Sức khỏe & Y tế": 1000000,         # Thiết yếu / Dự phòng
-        "Hiếu hỉ & Mua sắm": 3000000,       # Tùy chọn (Wants)
-        "Đầu tư & Trả nợ": 5000000,         # Tích lũy (Savings/Debt)
-        "Khác": 1000000                     # Linh hoạt
+        "Ăn uống & Sinh hoạt": 8000000,
+        "Nhà cửa & Tiện ích": 3000000,
+        "Giáo dục (Con cái)": 3000000,
+        "Đi lại & Phương tiện": 1500000,
+        "Sức khỏe & Y tế": 1000000,
+        "Hiếu hỉ & Mua sắm": 3000000,
+        "Đầu tư & Trả nợ": 5000000,
+        "Khác": 1000000
     }
 
 # =====================================================================
@@ -149,7 +149,7 @@ BROKER_ACCOUNTS = ["TCBS", "SSI", "VPS", "VNDirect", "HSC", "Mirae Asset"]
 BANK_ACCOUNTS = DEBIT_ACCOUNTS + CREDIT_CARDS + BROKER_ACCOUNTS
 FUNDING_SOURCES = BANK_ACCOUNTS + ["Tiền mặt", "Giải ngân vốn vay", "Khác"]
 TERMS = ["Không kỳ hạn", "1 Tháng", "2 Tháng", "3 Tháng", "6 Tháng", "7 Tháng", "12 Tháng", "24 Tháng", "36 Tháng"]
-CATS = ["Lương/Thu nhập", "Ăn uống & Sinh hoạt", "Giáo dục (Con cái)", "Nhà cửa & Tiện ích", "Sức khỏe & Y tế", "Đi lại & Phương tiện", "Hiếu hỉ & Muaắm", "Đầu tư & Trả nợ", "Khác"]
+CATS = ["Lương/Thu nhập", "Ăn uống & Sinh hoạt", "Giáo dục (Con cái)", "Nhà cửa & Tiện ích", "Sức khỏe & Y tế", "Đi lại & Phương tiện", "Hiếu hỉ & Mua sắm", "Đầu tư & Trả nợ", "Khác"]
 EXPENSE_CATS = [c for c in CATS if c != "Lương/Thu nhập"]
 FUNDS = ["Tieu Boi Funding", "Daddy Funding", "Mama Funding"]
 GOLD_TYPES = ["SJC Miếng", "Nhẫn trơn 9999", "PNJ", "DOJI", "Vàng trang sức", "Khác"]
@@ -208,8 +208,10 @@ def modal_edit_cashflow(row_data):
         with c2: category = st.selectbox("Phân loại", CATS, index=idx_cat)
         c3, c4 = st.columns(2)
         with c3:
-            try: t_dt = pd.to_datetime(row_data['created_at']).date()
+            # FIX LỖI PARSE THỜI GIAN
+            try: t_dt = pd.to_datetime(row_data['created_at'], errors='coerce').date()
             except: t_dt = date.today()
+            if pd.isna(t_dt): t_dt = date.today()
             trade_date = st.date_input("Ngày giao dịch", value=t_dt)
         with c4: note = st.text_input("Ghi chú", value=row_data['note'] if row_data['note'] else "")
         
@@ -218,7 +220,11 @@ def modal_edit_cashflow(row_data):
             if amount <= 0: st.error("⚠️ Số tiền không hợp lệ!")
             else:
                 try:
-                    dt_str = trade_date.strftime("%Y-%m-%d") + " " + pd.to_datetime(row_data['created_at']).strftime("%H:%M:%S")
+                    # FIX LỖI PARSE THỜI GIAN
+                    old_dt = pd.to_datetime(row_data['created_at'], errors='coerce')
+                    time_part = old_dt.strftime("%H:%M:%S") if not pd.isna(old_dt) else "00:00:00"
+                    dt_str = trade_date.strftime("%Y-%m-%d") + " " + time_part
+                    
                     data = {"account": account, "amount": int(amount), "category": category, "note": note, "created_at": dt_str}
                     supabase.table("cashflow").update(data).eq("id", row_data['id']).execute()
                     st.toast("✅ Đã cập nhật!", icon="🔄")
@@ -385,11 +391,12 @@ with tab_cashflow:
                     current_val = st.session_state.cat_budgets.get(cat, 0)
                     new_val = st.number_input(cat, value=current_val, step=500000, format="%d")
                     st.session_state.cat_budgets[cat] = new_val
-            st.info("💡 Lời khuyên: Phân bổ 50% cho Thiết yếu, 30% cho Tùy chọn, 20% cho Tích lũy.")
 
     if not df_all.empty:
         df_filtered = df_all.copy()
-        df_filtered['created_at_dt'] = pd.to_datetime(df_filtered['created_at'])
+        # FIX LỖI PARSE THỜI GIAN TẠI ĐÂY BẰNG errors='coerce'
+        df_filtered['created_at_dt'] = pd.to_datetime(df_filtered['created_at'], errors='coerce')
+        df_filtered = df_filtered.dropna(subset=['created_at_dt'])
         df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
         df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
         df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
@@ -445,7 +452,6 @@ with tab_cashflow:
             budget_remaining = budget_limit - spent
             bg_class = "budget-alert" if percent_spent > 0.8 else "budget-safe"
 
-            # Layout 2 thẻ nhỏ ở trên, 1 thẻ bự ở dưới
             sb1, sb2 = st.columns(2)
             with sb1:
                 st.markdown(f"""
@@ -483,13 +489,19 @@ with tab_cashflow:
         st.dataframe(df_display, column_config={"id": None, "Số tiền": st.column_config.NumberColumn("Số tiền (VND)", format="%,.0f ₫")}, use_container_width=True, hide_index=True)
         
         st.markdown("---")
-        action_id = st.selectbox("Chọn giao dịch để cập nhật:", df_display_source['id'].tolist(), format_func=lambda x: f"{pd.to_datetime(df_display_source[df_display_source['id'] == x]['created_at'].values[0]).strftime('%d/%m/%Y %H:%M')} | {df_display_source[df_display_source['id'] == x]['category'].values[0]} | {df_display_source[df_display_source['id'] == x]['amount'].values[0]:,.0f} ₫", key="select_cf")
+        # Fix lỗi parse ngày tháng tại selectbox bằng cách gọi từ dữ liệu đã được xử lý (created_at_dt)
+        action_id = st.selectbox(
+            "Chọn giao dịch để cập nhật:", 
+            df_display_source['id'].tolist(), 
+            format_func=lambda x: f"{df_display_source[df_display_source['id'] == x]['created_at_dt'].dt.strftime('%d/%m/%Y %H:%M').values[0]} | {df_display_source[df_display_source['id'] == x]['category'].values[0]} | {df_display_source[df_display_source['id'] == x]['amount'].values[0]:,.0f} ₫", 
+            key="select_cf"
+        )
         selected_row = df_display_source[df_display_source['id'] == action_id].iloc[0]
         col_a1, col_a2, _ = st.columns([1.5, 1.5, 3])
         with col_a1:
-            if st.button("✏️ SỬA GIAO DỊCH", use_container_width=True, key="edit_cf"): modal_edit_cashflow(selected_row)
+            if st.button("✏️ SỬA GIAO DỊCH NÀY", use_container_width=True, key="edit_cf"): modal_edit_cashflow(selected_row)
         with col_a2:
-            if st.button("❌ XÓA GIAO DỊCH", use_container_width=True, key="del_cf"):
+            if st.button("❌ XÓA GIAO DỊCH NÀY", use_container_width=True, key="del_cf"):
                 supabase.table("cashflow").delete().eq("id", action_id).execute()
                 st.toast("Đã xóa giao dịch!")
                 time.sleep(1)
@@ -570,7 +582,10 @@ with tab_home:
         res_cf = supabase.table("cashflow").select("*").execute()
         df_cf = pd.DataFrame(res_cf.data) if res_cf.data else pd.DataFrame()
         if not df_cf.empty:
-            df_cf['month_year'] = pd.to_datetime(df_cf['created_at']).dt.to_period('M')
+            # FIX LỖI PARSE THỜI GIAN TẠI ĐÂY BẰNG errors='coerce'
+            df_cf['created_at_dt'] = pd.to_datetime(df_cf['created_at'], errors='coerce')
+            df_cf = df_cf.dropna(subset=['created_at_dt'])
+            df_cf['month_year'] = df_cf['created_at_dt'].dt.to_period('M')
             monthly_income = df_cf[df_cf['category'] == 'Lương/Thu nhập'].groupby('month_year')['amount'].sum().mean()
             monthly_expense = df_cf[df_cf['category'] != 'Lương/Thu nhập'].groupby('month_year')['amount'].sum().mean()
             if pd.isna(monthly_income): monthly_income = 1
@@ -643,7 +658,7 @@ with tab_home:
 
     st.plotly_chart(plot_net_worth_trend(tong_tai_san, no_khoan_vay), use_container_width=True)
 
-# Các Tab còn lại giữ nguyên giao diện
-with tab_invest: st.info("Bấm vào các nút Thao tác nhanh (App Icon) phía trên để nhập liệu Đầu tư nhé.")
+# Các Tab còn lại giữ nguyên
+with tab_invest: st.info("Bấm vào các nút Thao tác nhanh (App Icon) phía trên để nhập liệu Đầu tư.")
 with tab_savings: st.info("Tính năng gửi Tiết kiệm vẫn giữ nguyên logic và dữ liệu an toàn.")
 with tab_realestate: st.info("Khoản vay ngân hàng tiếp tục tự động tính toán dư nợ mỗi ngày.")
