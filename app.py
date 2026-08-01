@@ -924,6 +924,9 @@ with tab_cashflow:
 # =====================================================================
 with tab_invest:
     st.markdown(f'<div class="metric-title" style="margin-bottom:10px;">DANH MỤC ĐẦU TƯ{f" ({current_member})" if current_member != "Tất cả" else ""}</div>', unsafe_allow_html=True)
+    df_stk_f = filter_by_member(df_stk, current_member)
+    df_ccq_f = filter_by_member(df_ccq, current_member)
+    df_gold_f = filter_by_member(df_gold, current_member)
     inv_stk, inv_ccq, inv_gld = st.tabs(["📈 Chứng khoán", "📊 Chứng chỉ quỹ", "🥇 Vàng"])
 
     # --- STOCKS ---
