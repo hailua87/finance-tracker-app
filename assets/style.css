@@ -1,8 +1,14 @@
+:root {
+    --primary-navy: #1E3A8A;
+    --accent-gold: #D4AF37;
+    --dark-slate: #1e293b;
+    --text-main: #f8fafc;
+}
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
 
 html, body, p, div, span, button, input, select, textarea, label, td, th { font-family: 'Inter', sans-serif; }
 .stIcon, span[data-baseweb="icon"], svg { font-family: inherit !important; }
-h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Playfair Display', serif !important; letter-spacing: -0.01em; }
+h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Inter', sans-serif !important; letter-spacing: -0.01em; }
 
 .block-container { padding-top: 3rem !important; padding-bottom: 1.5rem !important; gap: 0.5rem !important; }
 
@@ -23,7 +29,7 @@ h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Playfair Display', 
 div[data-testid="stMetric"], .ios-card { 
     border-radius: 12px !important; 
     padding: 15px; 
-    background-color: #1E3A8A; /* Navy Blue */
+    background-color: var(--primary-navy);
     color: #f8fafc;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
     border: 1px solid rgba(255,255,255,0.1) !important;
@@ -85,7 +91,7 @@ input[aria-label="SỐ TIỀN (VND)"] {
     font-size: 1.2rem;
     font-weight: 700;
     margin-bottom: 5px;
-    font-family: 'Playfair Display', serif;
+    font-family: 'Inter', sans-serif;
 }
 
 /* Table for Amortization Schedule */
@@ -155,3 +161,20 @@ input[aria-label="SỐ TIỀN (VND)"] {
 .text-green { color: #10B981 !important; }
 .text-red { color: #EF4444 !important; }
 .text-yellow { color: #F59E0B !important; }
+
+/* Primary Button - Navy Blue */
+button[data-testid="baseButton-primary"] {
+    background-color: var(--primary-navy) !important;
+    border-color: var(--primary-navy) !important;
+    color: white !important;
+}
+button[data-testid="baseButton-primary"]:hover {
+    background-color: #172a6b !important;
+    border-color: #172a6b !important;
+}
+
+/* Tabs active state */
+.stTabs [data-baseweb="tab"][aria-selected="true"] {
+    color: var(--primary-navy) !important;
+    border-bottom-color: var(--primary-navy) !important;
+}

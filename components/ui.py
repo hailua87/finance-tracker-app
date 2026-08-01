@@ -12,7 +12,7 @@ def dashboard_card(title: str, value_str: str, value_color: str = "#f8fafc", ico
     html = f"""
     <div class="ios-card {extra_classes}">
         <div class="metric-title">{icon} {title}</div>
-        <div style="font-family: 'Playfair Display'; font-size: 1.5rem; font-weight: 700; color: {value_color};">
+        <div style="font-family: 'Inter', sans-serif; font-size: 1.5rem; font-weight: 700; color: {value_color};">
             {value_str}
         </div>
     </div>
@@ -28,7 +28,7 @@ def budget_card(title: str, budget_limit: float, spent: float):
     html = f"""
     <div class="ios-card {bg_class}" style="margin-top: 10px;">
         <div class="metric-title">🎯 {title} ({(budget_limit/1000000):.1f}TR)</div>
-        <div style="font-family: 'Playfair Display'; font-size: 2.2rem; font-weight: 700;">{budget_remaining:,.0f} ₫</div>
+        <div style="font-family: 'Inter', sans-serif; font-size: 2.2rem; font-weight: 700;">{budget_remaining:,.0f} ₫</div>
         <div style="font-size: 0.85rem; opacity: 0.8; margin-top: 5px;">Tiến độ sử dụng: {percent_spent*100:.1f}%</div>
         <div class="progress-container">
             <div class="progress-bar-fill" style="width: {min(percent_spent*100, 100)}%;"></div>
@@ -55,7 +55,7 @@ def savings_goal_card(name: str, current: float, target: float, theme_class: str
     <div class="ios-card {theme_class}" style="height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
         <div>
             <div class="savings-goal-title">{name}</div>
-            <div style="font-size: 1.8rem; font-weight: 700; font-family: 'Playfair Display';">{current:,.0f} ₫</div>
+            <div style="font-size: 1.8rem; font-weight: 700; font-family: 'Inter', sans-serif;">{current:,.0f} ₫</div>
             <div style="font-size: 0.85rem; opacity: 0.8; margin-top: 5px;">Mục tiêu: {target:,.0f} ₫ ({percent*100:.1f}%)</div>
         </div>
         <div class="progress-container" style="margin-top: 15px; margin-bottom: 15px; background-color: rgba(255,255,255,0.3);">
@@ -69,11 +69,11 @@ def savings_goal_card(name: str, current: float, target: float, theme_class: str
 def net_worth_dashboard(total_assets: float, total_debts: float):
     net_worth = total_assets - total_debts
     html = f"""
-    <div class="ios-card" style="margin-bottom: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);">
+    <div class="ios-card" style="margin-bottom: 20px; background: var(--primary-navy); border: 1px solid var(--accent-gold);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;">
             <div>
                 <div class="metric-title" style="color: #94a3b8;">💎 TÀI SẢN RÒNG (NET WORTH)</div>
-                <div style="font-family: 'Playfair Display'; font-size: 3rem; font-weight: 700; color: #4ECDC4;">{net_worth:,.0f} ₫</div>
+                <div style="font-family: 'Inter', sans-serif; font-size: 3rem; font-weight: 700; color: var(--accent-gold);">{net_worth:,.0f} ₫</div>
             </div>
             <div style="display: flex; gap: 30px;">
                 <div>

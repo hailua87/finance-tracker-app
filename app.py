@@ -739,7 +739,7 @@ with tab_home:
     lev_color = "#10b981" if leverage_ratio <= 30 else ("#facc15" if leverage_ratio <= 50 else "#f87171")
     st.markdown(f"""<div class="ios-card" style="margin-bottom: 20px; background: #1e293b; border-left: 4px solid {lev_color};">
 <div class="metric-title" style="color: #94a3b8;">⚖️ TỶ LỆ ĐÒN BẨY (LEVERAGE RATIO)</div>
-<div style="font-family: 'Playfair Display'; font-size: 2rem; font-weight: 700; color: {lev_color};">{leverage_ratio:.1f}%</div>
+<div style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: {lev_color};">{leverage_ratio:.1f}%</div>
 <div style="margin-top: 5px; font-size: 0.85rem; color: #94a3b8;">
 An toàn: &lt; 30% | Cảnh báo: 30-50% | Rủi ro: &gt; 50%
 </div>
@@ -1134,10 +1134,10 @@ with tab_invest:
                     dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
                     note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
                     st.markdown(f'''
-                    <div class="fintech-card">
+                    <div class="fintech-card" style="border-left: 4px solid var(--accent-gold);">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <div>
-                                <div class="fintech-card-title">{row.get('gold_type', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
+                                <div class="fintech-card-title" style="color: var(--accent-gold);">{row.get('gold_type', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px; color: #f8fafc;">{act}</span></div>
                                 <div class="fintech-card-subtitle">{dt_str} • SL: {qty:,.2f} chỉ • Giá: {prc:,.0f}</div>
                                 {note_str}
                             </div>
@@ -1340,10 +1340,10 @@ with tab_realestate:
             note_html = f"<div class='fintech-card-note'>{note}</div>" if note else ""
             
             st.markdown(f'''
-            <div class="fintech-card">
+            <div class="fintech-card" style="border-left: 4px solid var(--accent-gold);">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
-                        <div class="fintech-card-title">🏢 {proj} - {inst} <span style="font-size:0.8rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{stat}</span></div>
+                        <div class="fintech-card-title" style="color: var(--accent-gold);">🏢 {proj} - {inst} <span style="font-size:0.8rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px; color: #f8fafc;">{stat}</span></div>
                         <div class="fintech-card-subtitle">Hạn TT: {dt_str} • Nguồn: {src}</div>
                         {note_html}
                     </div>
