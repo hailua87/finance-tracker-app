@@ -116,3 +116,42 @@ input[aria-label="SỐ TIỀN (VND)"] {
 .amortization-table th:first-child, .amortization-table td:first-child {
     text-align: left;
 }
+
+/* --- FINTECH UI CARDS --- */
+.fintech-card {
+    background-color: #1e293b;
+    border-radius: 12px;
+    padding: 15px;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.fintech-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+.fintech-card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #f8fafc;
+    margin-bottom: 4px;
+}
+.fintech-card-subtitle {
+    font-size: 0.85rem;
+    color: #94a3b8;
+}
+.fintech-card-note {
+    font-size: 0.85rem;
+    color: #94a3b8;
+    font-style: italic;
+    margin-top: 4px;
+}
+.fintech-card-amount {
+    font-weight: 700;
+    font-size: 1.25rem;
+    text-align: right;
+}
+.text-green { color: #10B981 !important; }
+.text-red { color: #EF4444 !important; }
+.text-yellow { color: #F59E0B !important; }

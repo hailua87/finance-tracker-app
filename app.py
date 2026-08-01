@@ -827,9 +827,31 @@ with tab_cashflow:
                         step=500000, format="%d", key=f"budget_{idx_cat}")
         with bt1:
             if not df_period.empty:
-                display_cols = [c for c in ['created_at', 'account', 'category', 'amount', 'note'] if c in df_period.columns]
-                st.dataframe(df_period[display_cols].sort_values('created_at', ascending=False), hide_index=True, use_container_width=True,
-                    column_config={"created_at": st.column_config.DatetimeColumn("Ngày", format="DD/MM/YYYY HH:mm"), "amount": st.column_config.NumberColumn("Số tiền", format="%,.0f ₫"), "account": "Tài khoản", "category": "Danh mục", "note": "Ghi chú"})
+                df_sorted = df_period.sort_values('created_at', ascending=False)
+                for _, row in df_sorted.iterrows():
+                    cat = row.get('category', '')
+                    is_income = (cat == 'Lương/Thu nhập')
+                    color_cls = "text-green" if is_income else "text-red"
+                    sign = "+" if is_income else "-"
+                    amt = safe_float(row.get('amount'))
+                    dt_val = row.get('created_at')
+                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y %H:%M') if pd.notna(dt_val) else ''
+                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
+                    acc = row.get('account', '')
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{cat}</div>
+                                <div class="fintech-card-subtitle">{dt_str} • {acc}</div>
+                                {note_str}
+                            </div>
+                            <div class="fintech-card-amount {color_cls}">
+                                {sign}{amt:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
             else:
                 st.info("Không có giao dịch trong kỳ.")
 
@@ -886,16 +908,51 @@ with tab_invest:
         with stk_sum_tab:
             summary_stk, _ = calc_investment_total(df_stk_f, 'ticker')
             if not summary_stk.empty:
-                st.dataframe(summary_stk, hide_index=True, use_container_width=True,
-                    column_config={"Giá vốn TB": st.column_config.NumberColumn(format="%,.0f ₫"), "Giá trị": st.column_config.NumberColumn(format="%,.0f ₫"), "SL nắm giữ": st.column_config.NumberColumn(format="%,.0f")})
                 st.metric("📈 Tổng giá trị Cổ phiếu", f"{tong_cp:,.0f} ₫")
+                for _, row in summary_stk.iterrows():
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{row['Tài sản']}</div>
+                                <div class="fintech-card-subtitle">SL: {row['SL nắm giữ']:,.0f} • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
+                            </div>
+                            <div class="fintech-card-amount text-green">
+                                {row['Giá trị']:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
             else:
                 st.info("Chưa có vị thế cổ phiếu.")
         with stk_hist_tab:
             if not df_stk_f.empty:
-                display_stk = df_stk_f.copy()
-                st.dataframe(display_stk, hide_index=True, use_container_width=True,
-                    column_config={"id": None, "trade_date": st.column_config.DatetimeColumn("Ngày GD", format="DD/MM/YYYY"), "volume": st.column_config.NumberColumn("KL", format="%d"), "price": st.column_config.NumberColumn("Giá", format="%,.0f ₫")})
+                df_stk_sorted = df_stk_f.sort_values('trade_date', ascending=False)
+                for _, row in df_stk_sorted.iterrows():
+                    act = str(row.get('action', ''))
+                    color_cls = "text-green" if "Mua" in act else "text-yellow"
+                    sign = "-" if "Mua" in act else "+"
+                    vol = safe_float(row.get('volume'))
+                    prc = safe_float(row.get('price'))
+                    val = vol * prc
+                    dt_val = row.get('trade_date')
+                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
+                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
+                                <div class="fintech-card-subtitle">{dt_str} • KL: {vol:,.0f} • Giá: {prc:,.0f}</div>
+                                {note_str}
+                            </div>
+                            <div class="fintech-card-amount {color_cls}">
+                                {sign}{val:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
+
                 options_stk = [f"{r.get('ticker','')} | {r.get('action','')} | KL:{r.get('volume','')} | {str(r.get('trade_date',''))[:10]}" for _, r in df_stk_f.iterrows()]
                 sel_idx_stk = st.selectbox("Chọn GD để sửa/xóa", range(len(options_stk)), format_func=lambda i: options_stk[i], key="sel_stk")
                 ce1, ce2 = st.columns(2)
@@ -918,15 +975,50 @@ with tab_invest:
         with ccq_sum_tab:
             summary_ccq, _ = calc_investment_total(df_ccq_f, 'ticker')
             if not summary_ccq.empty:
-                st.dataframe(summary_ccq, hide_index=True, use_container_width=True,
-                    column_config={"Giá vốn TB": st.column_config.NumberColumn(format="%,.0f ₫"), "Giá trị": st.column_config.NumberColumn(format="%,.0f ₫"), "SL nắm giữ": st.column_config.NumberColumn(format="%,.2f")})
                 st.metric("📊 Tổng giá trị CCQ", f"{tong_ccq:,.0f} ₫")
+                for _, row in summary_ccq.iterrows():
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{row['Tài sản']}</div>
+                                <div class="fintech-card-subtitle">SL: {row['SL nắm giữ']:,.2f} • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
+                            </div>
+                            <div class="fintech-card-amount text-green">
+                                {row['Giá trị']:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
             else:
                 st.info("Chưa có vị thế CCQ.")
         with ccq_hist_tab:
             if not df_ccq_f.empty:
-                st.dataframe(df_ccq_f, hide_index=True, use_container_width=True,
-                    column_config={"id": None, "trade_date": st.column_config.DatetimeColumn("Ngày GD", format="DD/MM/YYYY"), "volume": st.column_config.NumberColumn("SL", format="%.2f"), "price": st.column_config.NumberColumn("NAV", format="%,.0f ₫")})
+                df_ccq_sorted = df_ccq_f.sort_values('trade_date', ascending=False)
+                for _, row in df_ccq_sorted.iterrows():
+                    act = str(row.get('action', ''))
+                    color_cls = "text-green" if "Mua" in act else "text-yellow"
+                    sign = "-" if "Mua" in act else "+"
+                    vol = float(row.get('volume', 0) or 0)
+                    prc = float(row.get('price', 0) or 0)
+                    val = vol * prc
+                    dt_val = row.get('trade_date')
+                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
+                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
+                                <div class="fintech-card-subtitle">{dt_str} • SL: {vol:,.2f} • NAV: {prc:,.0f}</div>
+                                {note_str}
+                            </div>
+                            <div class="fintech-card-amount {color_cls}">
+                                {sign}{val:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
                 options_ccq = [f"{r.get('ticker','')} | {r.get('action','')} | {str(r.get('trade_date',''))[:10]}" for _, r in df_ccq_f.iterrows()]
                 sel_idx_ccq = st.selectbox("Chọn GD để sửa/xóa", range(len(options_ccq)), format_func=lambda i: options_ccq[i], key="sel_ccq")
                 ce1, ce2 = st.columns(2)
@@ -949,15 +1041,50 @@ with tab_invest:
         with gld_sum_tab:
             summary_gld, _ = calc_investment_total(df_gold_f, 'gold_type', vol_col='quantity')
             if not summary_gld.empty:
-                st.dataframe(summary_gld, hide_index=True, use_container_width=True,
-                    column_config={"Giá vốn TB": st.column_config.NumberColumn(format="%,.0f ₫"), "Giá trị": st.column_config.NumberColumn(format="%,.0f ₫"), "SL nắm giữ": st.column_config.NumberColumn(format="%,.2f")})
                 st.metric("🥇 Tổng giá trị Vàng", f"{tong_vang:,.0f} ₫")
+                for _, row in summary_gld.iterrows():
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{row['Tài sản']}</div>
+                                <div class="fintech-card-subtitle">SL: {row['SL nắm giữ']:,.2f} chỉ • Giá TB: {row['Giá vốn TB']:,.0f} ₫</div>
+                            </div>
+                            <div class="fintech-card-amount text-green">
+                                {row['Giá trị']:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
             else:
                 st.info("Chưa có vị thế Vàng.")
         with gld_hist_tab:
             if not df_gold_f.empty:
-                st.dataframe(df_gold_f, hide_index=True, use_container_width=True,
-                    column_config={"id": None, "trade_date": st.column_config.DatetimeColumn("Ngày GD", format="DD/MM/YYYY"), "quantity": st.column_config.NumberColumn("SL (Chỉ)", format="%.2f"), "price": st.column_config.NumberColumn("Giá", format="%,.0f ₫")})
+                df_gold_sorted = df_gold_f.sort_values('trade_date', ascending=False)
+                for _, row in df_gold_sorted.iterrows():
+                    act = str(row.get('action', ''))
+                    color_cls = "text-green" if "Mua" in act else "text-yellow"
+                    sign = "-" if "Mua" in act else "+"
+                    qty = float(row.get('quantity', 0) or 0)
+                    prc = float(row.get('price', 0) or 0)
+                    val = qty * prc
+                    dt_val = row.get('trade_date')
+                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
+                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">{row.get('gold_type', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
+                                <div class="fintech-card-subtitle">{dt_str} • SL: {qty:,.2f} chỉ • Giá: {prc:,.0f}</div>
+                                {note_str}
+                            </div>
+                            <div class="fintech-card-amount {color_cls}">
+                                {sign}{val:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
                 options_gld = [f"{r.get('gold_type','')} | {r.get('action','')} | {r.get('quantity','')} chỉ | {str(r.get('trade_date',''))[:10]}" for _, r in df_gold_f.iterrows()]
                 sel_idx_gld = st.selectbox("Chọn GD để sửa/xóa", range(len(options_gld)), format_func=lambda i: options_gld[i], key="sel_gld")
                 ce1, ce2 = st.columns(2)
@@ -1040,14 +1167,29 @@ with tab_savings:
             fund_df = df_savings[df_savings['fund_owner'] == fund_name].copy()
             if not fund_df.empty:
                 fund_df['amount'] = pd.to_numeric(fund_df['amount'], errors='coerce').fillna(0)
-                st.dataframe(fund_df, hide_index=True, use_container_width=True, column_config={
-                    "id": None, "fund_owner": None,
-                    "amount": st.column_config.NumberColumn("Số tiền", format="%,.0f ₫"),
-                    "interest_rate": st.column_config.NumberColumn("Lãi suất (%)", format="%.1f"),
-                    "term": st.column_config.NumberColumn("Kỳ hạn (th)"),
-                    "bank": "Ngân hàng", "note": "Ghi chú",
-                    "created_at": st.column_config.DatetimeColumn("Ngày tạo", format="DD/MM/YYYY"),
-                })
+                for _, row in fund_df.iterrows():
+                    amt = safe_float(row.get('amount', 0))
+                    rate = safe_float(row.get('interest_rate', 0))
+                    trm = safe_float(row.get('term', 0))
+                    bank = row.get('bank', '')
+                    note = row.get('note', '')
+                    dt_val = row.get('deposit_date')
+                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
+                    note_html = f"<div class='fintech-card-note'>{note}</div>" if note else ""
+                    st.markdown(f'''
+                    <div class="fintech-card">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div class="fintech-card-title">🏦 {bank}</div>
+                                <div class="fintech-card-subtitle">Lãi suất: {rate}%/năm • Kỳ hạn: {trm:,.0f} tháng • Ngày gửi: {dt_str}</div>
+                                {note_html}
+                            </div>
+                            <div class="fintech-card-amount text-green">
+                                {amt:,.0f} ₫
+                            </div>
+                        </div>
+                    </div>
+                    ''', unsafe_allow_html=True)
                 safe_key = fund_name.replace(" ", "_")
                 options_sv = [f"#{r.get('id','')} | {safe_float(r.get('amount')):,.0f}₫ | LS:{r.get('interest_rate',0)}% | {r.get('term',0)}th" for _, r in fund_df.iterrows()]
                 sel_sv = st.selectbox("Chọn sổ tiết kiệm", range(len(options_sv)), format_func=lambda i: options_sv[i], key=f"sel_sv_{safe_key}")
@@ -1111,29 +1253,32 @@ with tab_realestate:
         display_cols = [c for c in ['project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note'] if c in df_re_f.columns]
         df_display = df_re_f[display_cols].copy()
         
-        def style_re_status(row):
-            s = str(row.get('status', '')).strip()
-            if s == 'Đã thanh toán':
-                return ['background-color: rgba(16, 185, 129, 0.15)'] * len(row)
-            elif s == 'Chưa thanh toán':
-                return ['background-color: rgba(239, 68, 68, 0.2)'] * len(row)
-            return [''] * len(row)
+        for _, row in df_display.iterrows():
+            proj = row.get('project_name', '')
+            inst = row.get('installment_name', '')
+            amt = safe_float(row.get('amount', 0))
+            stat = str(row.get('status', '')).strip()
+            color_cls = "text-green" if stat == 'Đã thanh toán' else "text-red"
+            dt_val = row.get('due_date')
+            dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
+            src = row.get('funding_source', '')
+            note = row.get('note', '')
+            note_html = f"<div class='fintech-card-note'>{note}</div>" if note else ""
             
-        st.dataframe(
-            df_display.style.apply(style_re_status, axis=1),
-            hide_index=True,
-            use_container_width=True,
-            column_config={
-                "project_name": "Dự án",
-                "contract_value": st.column_config.NumberColumn("Giá trị HĐ", format="%,.0f ₫"),
-                "installment_name": "Tên đợt",
-                "amount": st.column_config.NumberColumn("Số tiền đợt này", format="%,.0f ₫"),
-                "funding_source": "Nguồn tiền",
-                "due_date": st.column_config.DatetimeColumn("Hạn TT", format="DD/MM/YYYY"),
-                "status": "Trạng thái",
-                "note": "Ghi chú"
-            }
-        )
+            st.markdown(f'''
+            <div class="fintech-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="fintech-card-title">🏢 {proj} - {inst} <span style="font-size:0.8rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{stat}</span></div>
+                        <div class="fintech-card-subtitle">Hạn TT: {dt_str} • Nguồn: {src}</div>
+                        {note_html}
+                    </div>
+                    <div class="fintech-card-amount {color_cls}">
+                        {amt:,.0f} ₫
+                    </div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
 
         with st.expander("⚙️ Quản lý & Chỉnh sửa BĐS", expanded=False):
             options_re = [f"{r.get('project_name', 'BĐS')} | {r.get('installment_name', '')} | {safe_float(r.get('amount', 0)):,.0f}₫ ({r.get('status','')})" for _, r in df_re_f.iterrows()]
@@ -1201,14 +1346,37 @@ with tab_realestate:
             })
 
         if debt_summary_rows:
-            df_debt_display = pd.DataFrame(debt_summary_rows)
-            st.dataframe(df_debt_display, hide_index=True, use_container_width=True, column_config={
-                "Gốc ban đầu": st.column_config.NumberColumn(format="%,.0f ₫"),
-                "Dư nợ hiện tại": st.column_config.NumberColumn(format="%,.0f ₫"),
-                "Gốc/Tháng": st.column_config.NumberColumn(format="%,.0f ₫"),
-                "Lãi/Tháng": st.column_config.NumberColumn(format="%,.0f ₫"),
-                "Đã trả (%)": st.column_config.ProgressColumn("Tiến độ", min_value=0, max_value=100, format="%.1f%%"),
-            })
+            for row in debt_summary_rows:
+                bank = row["Ngân hàng"]
+                purp = row["Mục đích"]
+                bal = float(row["Dư nợ hiện tại"])
+                orig = float(row["Gốc ban đầu"])
+                goc_t = float(row["Gốc/Tháng"])
+                lai_t = float(row["Lãi/Tháng"])
+                nxt = row["Ngày TT tiếp"]
+                pct = float(row["Đã trả (%)"])
+                
+                st.markdown(f'''
+                <div class="fintech-card">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                        <div style="flex: 1;">
+                            <div class="fintech-card-title">🏦 {bank} - {purp}</div>
+                            <div class="fintech-card-subtitle">Gốc/Tháng: {goc_t:,.0f} ₫ • Lãi: {lai_t:,.0f} ₫</div>
+                            <div class="fintech-card-subtitle" style="color: #facc15; margin-top: 4px;">⏳ Trả nợ kỳ tới: {nxt}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 0.85rem; color: #94a3b8;">Dư nợ hiện tại</div>
+                            <div class="fintech-card-amount text-red">
+                                {bal:,.0f} ₫
+                            </div>
+                            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">/ {orig:,.0f} ₫</div>
+                        </div>
+                    </div>
+                    <div class="progress-container" style="margin-top:12px;background-color:rgba(255,255,255,0.1);">
+                        <div class="progress-bar-fill" style="width:{min(pct,100)}%;background-color:#4ade80;"></div>
+                    </div>
+                </div>
+                ''', unsafe_allow_html=True)
 
         st.metric("💳 Tổng dư nợ hiện tại", f"{no_khoan_vay:,.0f} ₫")
 
