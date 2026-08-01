@@ -61,6 +61,34 @@ EXPENSE_CATS = [c for c in CATS if c != "Lương/Thu nhập"]
 FUND_MEMBER_MAP = {"Tieu Boi Funding": "Baby", "Daddy Funding": "Daddy", "Mama Funding": "Mommy"}
 FUND_THEME_MAP = {"Tieu Boi Funding": "card-baby", "Daddy Funding": "card-daddy", "Mama Funding": "card-mommy"}
 
+
+def calc_investment_total(df, group_col):
+    import pandas as pd
+    if df.empty or group_col not in df.columns:
+        return pd.DataFrame(), 0
+    summary_list = []
+    total_val = 0
+    for name, grp in df.groupby(group_col):
+        buy_rows = grp[grp['action'].str.lower().str.contains('buy|mua', na=False)]
+        sell_rows = grp[grp['action'].str.lower().str.contains('sell|bán', na=False)]
+        
+        col_amt = 'volume' if 'volume' in grp.columns else ('quantity' if 'quantity' in grp.columns else None)
+        if not col_amt:
+            continue
+            
+        buy_vol = buy_rows[col_amt].sum()
+        sell_vol = sell_rows[col_amt].sum()
+        net_vol = buy_vol - sell_vol
+        
+        buy_val = (buy_rows[col_amt] * buy_rows['price']).sum()
+        avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
+        cost = net_vol * avg_price
+        
+        if net_vol > 0:
+            summary_list.append({group_col: name, "SL tồn": net_vol, "Giá vốn TB": avg_price, "Tổng vốn": cost})
+            total_val += cost
+    return pd.DataFrame(summary_list), total_val
+
 # =====================================================================
 # 3. SESSION STATE
 # =====================================================================
@@ -159,29 +187,6 @@ def clear_cache_and_rerun():
     time.sleep(1)
     st.rerun()
 
-def calc_investment_total(df, group_col):
-    import pandas as pd
-    if df.empty or group_col not in df.columns:
-        return pd.DataFrame(), 0
-    summary_list = []
-    total_val = 0
-    for name, grp in df.groupby(group_col):
-        buy_rows = grp[grp['action'].str.lower().str.contains('buy|mua', na=False)]
-        sell_rows = grp[grp['action'].str.lower().str.contains('sell|bán', na=False)]
-        buy_vol = buy_rows['volume'].sum() if 'volume' in grp.columns else buy_rows.get('quantity', pd.Series([0])).sum()
-        sell_vol = sell_rows['volume'].sum() if 'volume' in grp.columns else sell_rows.get('quantity', pd.Series([0])).sum()
-        net_vol = buy_vol - sell_vol
-        
-        # Compute weighted average cost
-        col_amt = 'volume' if 'volume' in grp.columns else 'quantity'
-        buy_val = (buy_rows[col_amt] * buy_rows['price']).sum()
-        avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
-        cost = net_vol * avg_price
-        
-        if net_vol > 0:
-            summary_list.append({group_col: name, "SL tồn": net_vol, "Giá vốn TB": avg_price, "Tổng vốn": cost})
-            total_val += cost
-    return pd.DataFrame(summary_list), total_val
 
 # =====================================================================
 # 5. SIDEBAR
