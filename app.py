@@ -127,7 +127,7 @@ def parse_smart_amount(s: str) -> float:
             return float(s[:-1]) * 1_000_000
         if "k" in s:
             return float(s.replace("k", "")) * 1_000
-        if s.count('.') > 1:
+        if "." in s:
             return float(s.replace(".", ""))
         return float(s)
     except Exception:
