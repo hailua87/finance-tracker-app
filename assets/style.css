@@ -1,20 +1,31 @@
+
 :root {
-    --primary-navy: #1E3A8A;
-    --accent-gold: #D4AF37;
-    --dark-slate: #1e293b;
-    --text-main: #f8fafc;
+    --primary-green: #2E7D32;
+    --accent-blue: #1976D2;
+    --alert-red: #D32F2F;
+    --bg-light: #F8F9FA;
+    --card-bg: #FFFFFF;
+    --text-main: #333333;
+    --text-muted: #6b7280;
 }
+
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Inter:wght@400;500;600;700&display=swap');
 
-html, body, p, div, span, button, input, select, textarea, label, td, th { font-family: 'Inter', sans-serif; }
+html, body, p, div, span, button, input, select, textarea, label, td, th { 
+    font-family: 'Inter', sans-serif; 
+}
+.stApp {
+    background-color: var(--bg-light);
+}
+
 .stIcon, span[data-baseweb="icon"], svg { font-family: inherit !important; }
-h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Inter', sans-serif !important; letter-spacing: -0.01em; }
+h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Inter', sans-serif !important; letter-spacing: -0.01em; color: var(--text-main); }
 
 .block-container { padding-top: 3rem !important; padding-bottom: 1.5rem !important; gap: 0.5rem !important; }
 
 .hallmark-header { 
-    font-size: 2.2rem; font-weight: 700; color: #f8fafc; 
-    border-left: 6px solid #4ECDC4; padding-left: 15px; 
+    font-size: 2.2rem; font-weight: 700; color: var(--primary-green); 
+    border-left: 6px solid var(--accent-blue); padding-left: 15px; 
     margin-bottom: 15px; margin-top: 0px; 
 }
 
@@ -23,52 +34,64 @@ h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Inter', sans-serif 
     .hallmark-header { margin-top: -25px; }
 }
 
-.metric-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 600; margin-bottom: 5px; }
+.metric-title { 
+    font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; 
+    color: var(--text-muted); font-weight: 600; margin-bottom: 5px; 
+}
 
-/* Dashboard Card - Navy Blue Theme */
+/* Dashboard Card - Light Theme */
 div[data-testid="stMetric"], .ios-card { 
     border-radius: 12px !important; 
     padding: 15px; 
-    background-color: var(--primary-navy);
-    color: #f8fafc;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06) !important;
-    border: 1px solid rgba(255,255,255,0.1) !important;
+    background-color: var(--card-bg) !important;
+    color: var(--text-main) !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
+    border: 1px solid rgba(0,0,0,0.05) !important;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 div[data-testid="stMetric"]:hover, .ios-card:hover { 
     transform: translateY(-2px); 
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
 }
 
-/* Metric text color override since background is Navy Blue */
+/* Metric text color override */
 div[data-testid="stMetricValue"] > div {
-    color: #f8fafc !important;
+    color: var(--primary-green) !important;
+}
+div[data-testid="stMetricLabel"] > div > p {
+    color: var(--text-muted) !important;
+}
+div[data-testid="stMetricDelta"] > div > span {
+    color: var(--accent-blue) !important;
 }
 
-.budget-alert { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%) !important; color: white !important; }
-.budget-alert .metric-title { color: rgba(255,255,255,0.8) !important; }
-.budget-safe { background: linear-gradient(135deg, #10b981 0%, #047857 100%) !important; color: white; }
+.budget-alert { background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%) !important; border-left: 4px solid var(--alert-red) !important;}
+.budget-alert .metric-title { color: var(--alert-red) !important; }
+.budget-safe { background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%) !important; border-left: 4px solid var(--primary-green) !important;}
+.budget-safe .metric-title { color: var(--primary-green) !important; }
 
 .app-icon-btn > div > button {
     height: 85px !important; border-radius: 16px !important;
-    background: linear-gradient(145deg, #1e293b, #0f172a) !important;
-    border: 1px solid #334155 !important; box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+    background: #ffffff !important; color: var(--primary-green) !important;
+    border: 1px solid #e5e7eb !important; box-shadow: 0 2px 10px rgba(0,0,0,0.05) !important;
     display: flex; flex-direction: column; justify-content: center; align-items: center;
     gap: 5px; transition: all 0.2s;
 }
-.app-icon-btn > div > button p { font-size: 0.8rem !important; font-weight: 600 !important; margin: 0 !important; }
+.app-icon-btn > div > button p { font-size: 0.8rem !important; font-weight: 600 !important; margin: 0 !important; color: var(--primary-green) !important; }
+.app-icon-btn > div > button:hover { transform: translateY(-2px); box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important; border-color: var(--primary-green) !important; }
 .app-icon-btn > div > button:active { transform: scale(0.95); }
 
 input[aria-label="SỐ TIỀN (VND)"] {
     font-size: 1.8rem !important; font-weight: bold !important; 
-    color: #4ECDC4 !important; text-align: right !important; height: 65px !important;
+    color: var(--primary-green) !important; text-align: right !important; height: 65px !important;
+    background-color: var(--card-bg) !important;
 }
 #stHeader { display: none; }
 
 /* Custom Progress Bar styles */
 .progress-container {
     width: 100%;
-    background-color: rgba(255,255,255,0.2);
+    background-color: #e5e7eb;
     border-radius: 999px;
     height: 8px;
     margin-top: 8px;
@@ -76,22 +99,21 @@ input[aria-label="SỐ TIỀN (VND)"] {
 }
 .progress-bar-fill {
     height: 100%;
-    background-color: #4ECDC4;
+    background-color: var(--primary-green);
     border-radius: 999px;
     transition: width 0.5s ease-in-out;
 }
 
-/* --- NEW FOR PHASE 3 & 4 --- */
-/* Family Savings Colors */
-.card-daddy { background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%) !important; color: white; }
-.card-mommy { background: linear-gradient(135deg, #BE185D 0%, #831843 100%) !important; color: white; }
-.card-baby { background: linear-gradient(135deg, #047857 0%, #064E3B 100%) !important; color: white; }
+/* Family Savings Colors - Modern Light Theme */
+.card-daddy { border-left: 4px solid #1976D2 !important; }
+.card-mommy { border-left: 4px solid #D81B60 !important; }
+.card-baby { border-left: 4px solid #FBC02D !important; }
 
 .savings-goal-title {
     font-size: 1.2rem;
     font-weight: 700;
     margin-bottom: 5px;
-    font-family: 'Inter', sans-serif;
+    color: var(--text-main);
 }
 
 /* Table for Amortization Schedule */
@@ -99,25 +121,25 @@ input[aria-label="SỐ TIỀN (VND)"] {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
-    color: #f8fafc;
-    background-color: #1e293b;
+    color: var(--text-main);
+    background-color: var(--card-bg);
     border-radius: 8px;
     overflow: hidden;
 }
 .amortization-table th, .amortization-table td {
     padding: 10px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.05);
+    border-bottom: 1px solid #e5e7eb;
     text-align: right;
 }
 .amortization-table th {
-    background-color: rgba(0,0,0,0.3);
+    background-color: #f3f4f6;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--text-muted);
     text-transform: uppercase;
     font-size: 0.75rem;
 }
 .amortization-table tr:hover {
-    background-color: rgba(255,255,255,0.05);
+    background-color: #f9fafb;
 }
 .amortization-table th:first-child, .amortization-table td:first-child {
     text-align: left;
@@ -125,31 +147,31 @@ input[aria-label="SỐ TIỀN (VND)"] {
 
 /* --- FINTECH UI CARDS --- */
 .fintech-card {
-    background-color: #1e293b;
+    background-color: var(--card-bg);
     border-radius: 12px;
     padding: 15px;
     margin-bottom: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+    border: 1px solid #f3f4f6;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .fintech-card:hover {
     transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
 }
 .fintech-card-title {
     font-size: 1.1rem;
     font-weight: 600;
-    color: #f8fafc;
+    color: var(--text-main);
     margin-bottom: 4px;
 }
 .fintech-card-subtitle {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: var(--text-muted);
 }
 .fintech-card-note {
     font-size: 0.85rem;
-    color: #94a3b8;
+    color: var(--text-muted);
     font-style: italic;
     margin-top: 4px;
 }
@@ -158,23 +180,29 @@ input[aria-label="SỐ TIỀN (VND)"] {
     font-size: 1.25rem;
     text-align: right;
 }
-.text-green { color: #10B981 !important; }
-.text-red { color: #EF4444 !important; }
+.text-green { color: var(--primary-green) !important; }
+.text-red { color: var(--alert-red) !important; }
 .text-yellow { color: #F59E0B !important; }
 
-/* Primary Button - Navy Blue */
+/* Primary Button */
 button[data-testid="baseButton-primary"] {
-    background-color: var(--primary-navy) !important;
-    border-color: var(--primary-navy) !important;
+    background-color: var(--primary-green) !important;
+    border-color: var(--primary-green) !important;
     color: white !important;
 }
 button[data-testid="baseButton-primary"]:hover {
-    background-color: #172a6b !important;
-    border-color: #172a6b !important;
+    background-color: #1b5e20 !important;
+    border-color: #1b5e20 !important;
 }
 
 /* Tabs active state */
 .stTabs [data-baseweb="tab"][aria-selected="true"] {
-    color: var(--primary-navy) !important;
-    border-bottom-color: var(--primary-navy) !important;
+    color: var(--primary-green) !important;
+    border-bottom-color: var(--primary-green) !important;
+}
+
+/* DataFrame Overrides for Light Theme */
+[data-testid="stDataFrame"] {
+    background-color: var(--card-bg) !important;
+    border-radius: 8px !important;
 }

@@ -47,6 +47,18 @@ from components.ui import load_css, net_worth_dashboard
 # =====================================================================
 # 1. PAGE CONFIG & SUPABASE
 # =====================================================================
+
+def init_session_state():
+    defaults = {
+        'current_member': 'Tất cả',
+        'editing_debt': None,
+        'refresh_key': 0
+    }
+    for k, v in defaults.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
+
+init_session_state()
 st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", page_icon="💰", layout="wide", initial_sidebar_state="expanded")
 
 # --- BẢO MẬT BẰNG MẬT KHẨU ---
@@ -291,9 +303,12 @@ def modal_cashflow():
         else:
             created_at_str = f"{trade_date} {time.strftime('%H:%M:%S')}"
             try:
-                supabase.table("cashflow").insert({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).execute()
-                st.session_state.last_account = account
-                st.session_state.cf_amount_str = ""
+                try:
+                    supabase.table("cashflow").insert({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).execute()
+                    st.session_state.last_account = account
+                    st.session_state.cf_amount_str = ""
+                except Exception as e:
+                    st.error(f'Lỗi thao tác dữ liệu: {e}')
                 st.success("✅ Đã lưu giao dịch thành công!")
                 time.sleep(1)
                 clear_cache_and_rerun()
@@ -326,8 +341,11 @@ def modal_edit_cashflow():
             old_time = dt_val.strftime('%H:%M:%S') if pd.notna(dt_val) else time.strftime('%H:%M:%S')
             created_at_str = f"{trade_date} {old_time}"
             try:
-                supabase.table("cashflow").update({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).eq("id", row['id']).execute()
-                st.session_state.editing_cf = None
+                try:
+                    supabase.table("cashflow").update({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).eq("id", row['id']).execute()
+                    st.session_state.editing_cf = None
+                except Exception as e:
+                    st.error(f'Lỗi thao tác dữ liệu: {e}')
                 st.success("✅ Đã cập nhật giao dịch thành công!")
                 time.sleep(1)
                 clear_cache_and_rerun()
@@ -354,7 +372,10 @@ def modal_stock():
             elif vol <= 0 or price <= 0: st.error("⚠️ KL & Giá > 0!")
             else:
                 try:
-                    supabase.table("stocks").insert({"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": int(vol), "price": float(price), "note": note}).execute()
+                    try:
+                        supabase.table("stocks").insert({"trade_date": str(trade_date), "broker": broker, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": int(vol), "price": float(price), "note": note}).execute()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
                     st.success("✅ Đã lưu lệnh cổ phiếu thành công!")
                     time.sleep(1)
                     clear_cache_and_rerun()
@@ -382,7 +403,10 @@ def modal_ccq():
             else:
                 nav = total_val / vol
                 try:
-                    supabase.table("ccq_funds").insert({"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).execute()
+                    try:
+                        supabase.table("ccq_funds").insert({"trade_date": str(trade_date), "platform": platform, "fund_owner": fund_owner, "ticker": ticker.strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).execute()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
                     st.success("✅ Đã lưu giao dịch CCQ thành công!")
                     time.sleep(1)
                     clear_cache_and_rerun()
@@ -407,7 +431,10 @@ def modal_gold():
             if qty <= 0 or price <= 0: st.error("⚠️ SL & Giá > 0!")
             else:
                 try:
-                    supabase.table("gold").insert({"trade_date": str(trade_date), "gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).execute()
+                    try:
+                        supabase.table("gold").insert({"trade_date": str(trade_date), "gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).execute()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
                     st.success("✅ Đã lưu giao dịch vàng thành công!")
                     time.sleep(1)
                     clear_cache_and_rerun()
@@ -433,7 +460,10 @@ def modal_debt():
             if principal <= 0: st.error("⚠️ Tiền vay > 0!")
             else:
                 try:
-                    supabase.table("debts").insert({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "start_date": str(start_date), "interest_rate": rate, "payment_day": int(payment_day), "grace_period": int(grace)}).execute()
+                    try:
+                        supabase.table("debts").insert({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "start_date": str(start_date), "interest_rate": rate, "payment_day": int(payment_day), "grace_period": int(grace)}).execute()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
                     st.success("✅ Đã thêm khoản vay mới thành công!")
                     time.sleep(1)
                     clear_cache_and_rerun()
@@ -509,7 +539,10 @@ def modal_add_realestate():
                 "created_at": time.strftime("%Y-%m-%d %H:%M:%S")
             }
             try:
-                supabase.table("realestate").insert(payload).execute()
+                try:
+                    supabase.table("realestate").insert(payload).execute()
+                except Exception as e:
+                    st.error(f'Lỗi thao tác dữ liệu: {e}')
                 st.success("✅ Đã thêm đợt thanh toán BĐS thành công!")
                 time.sleep(1)
                 clear_cache_and_rerun()
@@ -536,10 +569,16 @@ def modal_add_savings():
                 payload_without_note = {"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
                 try:
                     try:
-                        supabase.table("savings").insert(payload_with_note).execute()
+                        try:
+                            supabase.table("savings").insert(payload_with_note).execute()
+                        except Exception as e:
+                            st.error(f'Lỗi thao tác dữ liệu: {e}')
                     except Exception as e:
                         if 'Could not find the' in str(e) or 'PGRST204' in str(e):
-                            supabase.table("savings").insert(payload_without_note).execute()
+                            try:
+                                supabase.table("savings").insert(payload_without_note).execute()
+                            except Exception as e:
+                                st.error(f'Lỗi thao tác dữ liệu: {e}')
                         else:
                             raise e
                     st.success("✅ Đã tạo sổ tiết kiệm thành công!")
@@ -565,11 +604,14 @@ def modal_edit_stock():
         with c4: price = st.number_input("Giá", value=safe_float(row.get('price')), min_value=0.0, format="%.0f")
         note = st.text_input("Ghi chú", value=row.get('note', '') or '')
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
-            supabase.table("stocks").update({"broker": broker, "fund_owner": fund_owner, "ticker": ticker.upper().strip(), "action": action, "volume": int(volume), "price": float(price), "note": note}).eq("id", row['id']).execute()
-            st.session_state.editing_stock = None
-            st.toast("✅ Đã cập nhật!", icon="📈")
-            clear_cache_and_rerun()
+            try:
+                supabase.table("stocks").update({"broker": broker, "fund_owner": fund_owner, "ticker": ticker.upper().strip(), "action": action, "volume": int(volume), "price": float(price), "note": note}).eq("id", row['id']).execute()
+                st.session_state.editing_stock = None
+                st.toast("✅ Đã cập nhật!", icon="📈")
+                clear_cache_and_rerun()
 
+            except Exception as e:
+                st.error(f'Lỗi thao tác dữ liệu: {e}')
 @st.dialog("✏️ SỬA GD CHỨNG CHỈ QUỸ")
 def modal_edit_ccq():
     row = st.session_state.editing_ccq
@@ -596,11 +638,14 @@ def modal_edit_ccq():
             elif vol <= 0 or total_val <= 0: st.error("⚠️ Giá trị & SL > 0!")
             else:
                 nav = total_val / vol
-                supabase.table("ccq_funds").update({"platform": platform, "fund_owner": fund_owner, "ticker": ticker.upper().strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).eq("id", row['id']).execute()
-                st.session_state.editing_ccq = None
-                st.toast("✅ Đã cập nhật!", icon="📊")
-                clear_cache_and_rerun()
+                try:
+                    supabase.table("ccq_funds").update({"platform": platform, "fund_owner": fund_owner, "ticker": ticker.upper().strip(), "action": action, "volume": float(vol), "price": float(nav), "note": note}).eq("id", row['id']).execute()
+                    st.session_state.editing_ccq = None
+                    st.toast("✅ Đã cập nhật!", icon="📊")
+                    clear_cache_and_rerun()
 
+                except Exception as e:
+                    st.error(f'Lỗi thao tác dữ liệu: {e}')
 @st.dialog("✏️ SỬA GD VÀNG")
 def modal_edit_gold():
     row = st.session_state.editing_gold
@@ -616,11 +661,14 @@ def modal_edit_gold():
         with c4: price = st.number_input("Đơn giá", value=safe_float(row.get('price')), min_value=0.0, format="%.0f")
         note = st.text_input("Ghi chú", value=row.get('note', '') or '')
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
-            supabase.table("gold").update({"gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).eq("id", row['id']).execute()
-            st.session_state.editing_gold = None
-            st.toast("✅ Đã cập nhật!", icon="🥇")
-            clear_cache_and_rerun()
+            try:
+                supabase.table("gold").update({"gold_type": gold_type, "fund_owner": fund_owner, "action": action, "quantity": float(qty), "price": float(price), "note": note}).eq("id", row['id']).execute()
+                st.session_state.editing_gold = None
+                st.toast("✅ Đã cập nhật!", icon="🥇")
+                clear_cache_and_rerun()
 
+            except Exception as e:
+                st.error(f'Lỗi thao tác dữ liệu: {e}')
 @st.dialog("✏️ SỬA SỔ TIẾT KIỆM")
 def modal_edit_savings():
     row = st.session_state.editing_savings
@@ -641,10 +689,16 @@ def modal_edit_savings():
             payload_without_note = {"fund_owner": fund_owner, "amount": int(amount), "interest_rate": float(rate), "term": int(term), "bank": bank}
             try:
                 try:
-                    supabase.table("savings").update(payload_with_note).eq("id", row['id']).execute()
+                    try:
+                        supabase.table("savings").update(payload_with_note).eq("id", row['id']).execute()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
                 except Exception as e:
                     if 'Could not find the' in str(e) or 'PGRST204' in str(e):
-                        supabase.table("savings").update(payload_without_note).eq("id", row['id']).execute()
+                        try:
+                            supabase.table("savings").update(payload_without_note).eq("id", row['id']).execute()
+                        except Exception as e:
+                            st.error(f'Lỗi thao tác dữ liệu: {e}')
                     else:
                         raise e
                 st.session_state.editing_savings = None
@@ -707,11 +761,14 @@ def modal_edit_debt():
         with c4: payment_day = st.number_input("Ngày TT (mùng)", value=int(safe_float(row.get('payment_day', 5))), min_value=1, max_value=31)
         grace = st.number_input("Ân hạn gốc (tháng)", value=int(safe_float(row.get('grace_period'))), min_value=0, step=1)
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
-            supabase.table("debts").update({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "interest_rate": float(rate), "payment_day": int(payment_day), "grace_period": int(grace)}).eq("id", row['id']).execute()
-            st.session_state.editing_debt = None
-            st.toast("✅ Đã cập nhật!", icon="🏦")
-            clear_cache_and_rerun()
+            try:
+                supabase.table("debts").update({"purpose": purpose, "bank": bank, "original_principal": int(principal), "total_months": int(total_months), "interest_rate": float(rate), "payment_day": int(payment_day), "grace_period": int(grace)}).eq("id", row['id']).execute()
+                st.session_state.editing_debt = None
+                st.toast("✅ Đã cập nhật!", icon="🏦")
+                clear_cache_and_rerun()
 
+            except Exception as e:
+                st.error(f'Lỗi thao tác dữ liệu: {e}')
 # =====================================================================
 # 7. QUICK ACTION BUTTONS
 # =====================================================================
@@ -736,14 +793,50 @@ st.markdown("<br/>", unsafe_allow_html=True)
 # =====================================================================
 # 8. DATA FETCHING — ALL 8 TABLES FROM SUPABASE
 # =====================================================================
-df_cf = fetch_table("cashflow")
-df_stk = fetch_table("stocks")
-df_ccq = fetch_table("ccq_funds")
-df_gold = fetch_table("gold")
-df_savings = fetch_table("savings")
-df_re = fetch_table("realestate")
-df_debts = fetch_table("debts")
-df_ob = fetch_table("opening_balances")
+# Ensure default initialization to prevent UnboundLocalError
+df_cf = pd.DataFrame()
+df_stk = pd.DataFrame()
+df_ccq = pd.DataFrame()
+df_gold = pd.DataFrame()
+df_savings = pd.DataFrame()
+df_re = pd.DataFrame()
+df_debts = pd.DataFrame()
+df_ob = pd.DataFrame()
+nw_data = {"net_worth": 0, "assets": {"Cash": 0, "Savings": 0, "Stocks": 0, "Gold": 0, "Funds": 0, "Real Estate": 0}, "liabilities": 0}
+
+# Fetch data safely
+@st.cache_data(ttl=60)
+def load_all_data(_supabase_client):
+    def get_df(tbl):
+        response = _supabase_client.table(tbl).select("*").execute()
+        return pd.DataFrame(response.data) if response and response.data else pd.DataFrame()
+    return {
+        "cashflow": get_df("cashflow"),
+        "stocks": get_df("stocks"),
+        "ccq_funds": get_df("ccq_funds"),
+        "gold": get_df("gold"),
+        "savings": get_df("savings"),
+        "realestate": get_df("realestate"),
+        "debts": get_df("debts"),
+        "opening_balances": get_df("opening_balances")
+    }
+
+try:
+    all_data = load_all_data(supabase)
+    df_cf = all_data["cashflow"]
+    df_stk = all_data["stocks"]
+    df_ccq = all_data["ccq_funds"]
+    df_gold = all_data["gold"]
+    df_savings = all_data["savings"]
+    df_re = all_data["realestate"]
+    df_debts = all_data["debts"]
+    df_ob = all_data["opening_balances"]
+except Exception as e:
+    st.error(f"Lỗi tải dữ liệu: {e}")
+    df_cf = df_stk = df_ccq = df_gold = df_savings = df_re = df_debts = df_ob = pd.DataFrame()
+
+nw_data = {"net_worth": 0, "assets": {"Cash": 0, "Savings": 0, "Stocks": 0, "Gold": 0, "Funds": 0, "Real Estate": 0}, "liabilities": 0}
+
 
 # =====================================================================
 # METRIC PRE-COMPUTATION FOR ACCURACY & TABS
@@ -963,7 +1056,7 @@ def render_net_worth_dashboard(data, df_cf, current_member):
         if not asset_df.empty:
             fig = px.pie(asset_df, values='Giá trị', names='Loại', hole=0.55,
                          color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6", "#eab308", "#ef4444"])
-            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
+            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#333333",
                               legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
                               margin=dict(t=10, b=10, l=10, r=10))
             st.plotly_chart(fig, use_container_width=True)
@@ -1050,7 +1143,7 @@ with tab_cashflow:
                 palette = ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A535C', '#8b5cf6', '#F7FFF7', '#FF8C42', '#38bdf8']
                 fig = px.pie(df_pie, names='category', values='amount', hole=0.55, color_discrete_sequence=palette)
                 fig.update_traces(textposition='inside', textinfo='percent+label')
-                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc", showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#333333", showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
                 event = st.plotly_chart(fig, use_container_width=True, on_select="rerun", key="pie_cf")
                 if event and isinstance(event, dict) and event.get("selection"):
                     pts = event["selection"].get("points", [])
@@ -1120,9 +1213,12 @@ with tab_cashflow:
                     st.session_state.editing_cf = df_sorted.iloc[sel_idx_cf].to_dict()
             with ce2:
                 if st.button("❌ XÓA", key="btn_del_cf", use_container_width=True):
-                    supabase.table("cashflow").delete().eq("id", df_sorted.iloc[sel_idx_cf]['id']).execute()
-                    st.toast("🗑️ Đã xóa!", icon="✅")
-                    clear_cache_and_rerun()
+                    try:
+                        supabase.table("cashflow").delete().eq("id", df_sorted.iloc[sel_idx_cf]['id']).execute()
+                        st.toast("🗑️ Đã xóa!", icon="✅")
+                        clear_cache_and_rerun()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
             if st.session_state.get("editing_cf"):
                 modal_edit_cashflow()
     else:
@@ -1182,9 +1278,12 @@ with tab_invest:
                             st.session_state.editing_stock = df_stk_f.iloc[sel_idx_stk].to_dict()
                     with ce2:
                         if st.button("❌ XÓA", key="btn_del_stk", use_container_width=True):
-                            supabase.table("stocks").delete().eq("id", df_stk_f.iloc[sel_idx_stk]['id']).execute()
-                            st.toast("🗑️ Đã xóa!", icon="✅")
-                            clear_cache_and_rerun()
+                            try:
+                                supabase.table("stocks").delete().eq("id", df_stk_f.iloc[sel_idx_stk]['id']).execute()
+                                st.toast("🗑️ Đã xóa!", icon="✅")
+                                clear_cache_and_rerun()
+                            except Exception as e:
+                                st.error(f'Lỗi thao tác dữ liệu: {e}')
                     if st.session_state.get("editing_stock"):
                         modal_edit_stock()
             else:
@@ -1234,9 +1333,12 @@ with tab_invest:
                             st.session_state.editing_ccq = df_ccq_f.iloc[sel_idx_ccq].to_dict()
                     with ce2:
                         if st.button("❌ XÓA", key="btn_del_ccq", use_container_width=True):
-                            supabase.table("ccq_funds").delete().eq("id", df_ccq_f.iloc[sel_idx_ccq]['id']).execute()
-                            st.toast("🗑️ Đã xóa!", icon="✅")
-                            clear_cache_and_rerun()
+                            try:
+                                supabase.table("ccq_funds").delete().eq("id", df_ccq_f.iloc[sel_idx_ccq]['id']).execute()
+                                st.toast("🗑️ Đã xóa!", icon="✅")
+                                clear_cache_and_rerun()
+                            except Exception as e:
+                                st.error(f'Lỗi thao tác dữ liệu: {e}')
                     if st.session_state.get("editing_ccq"):
                         modal_edit_ccq()
             else:
@@ -1286,9 +1388,12 @@ with tab_invest:
                             st.session_state.editing_gold = df_gold_f.iloc[sel_idx_gld].to_dict()
                     with ce2:
                         if st.button("❌ XÓA", key="btn_del_gld", use_container_width=True):
-                            supabase.table("gold").delete().eq("id", df_gold_f.iloc[sel_idx_gld]['id']).execute()
-                            st.toast("🗑️ Đã xóa!", icon="✅")
-                            clear_cache_and_rerun()
+                            try:
+                                supabase.table("gold").delete().eq("id", df_gold_f.iloc[sel_idx_gld]['id']).execute()
+                                st.toast("🗑️ Đã xóa!", icon="✅")
+                                clear_cache_and_rerun()
+                            except Exception as e:
+                                st.error(f'Lỗi thao tác dữ liệu: {e}')
                     if st.session_state.get("editing_gold"):
                         modal_edit_gold()
             else:
@@ -1380,9 +1485,12 @@ with tab_savings:
                             st.session_state.editing_savings = fund_df.iloc[sel_sv].to_dict()
                     with sv_e2:
                         if st.button("❌ TẤT TOÁN", key=f"btn_del_sv_{safe_key}", use_container_width=True):
-                            supabase.table("savings").delete().eq("id", fund_df.iloc[sel_sv]['id']).execute()
-                            st.toast("🗑️ Đã tất toán!", icon="✅")
-                            clear_cache_and_rerun()
+                            try:
+                                supabase.table("savings").delete().eq("id", fund_df.iloc[sel_sv]['id']).execute()
+                                st.toast("🗑️ Đã tất toán!", icon="✅")
+                                clear_cache_and_rerun()
+                            except Exception as e:
+                                st.error(f'Lỗi thao tác dữ liệu: {e}')
             else:
                 st.info(f"Chưa có sổ tiết kiệm nào cho {fund_name}.")
         else:
@@ -1561,9 +1669,12 @@ with tab_realestate:
                     st.session_state.editing_realestate = df_re_f.iloc[sel_re].to_dict()
             with re_e2:
                 if st.button("❌ XÓA BĐS", key="btn_del_re", use_container_width=True):
-                    supabase.table("realestate").delete().eq("id", df_re_f.iloc[sel_re]['id']).execute()
-                    st.toast("🗑️ Đã xóa!", icon="✅")
-                    clear_cache_and_rerun()
+                    try:
+                        supabase.table("realestate").delete().eq("id", df_re_f.iloc[sel_re]['id']).execute()
+                        st.toast("🗑️ Đã xóa!", icon="✅")
+                        clear_cache_and_rerun()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
         if st.session_state.get("editing_realestate"):
             modal_edit_realestate()
     else:
@@ -1670,14 +1781,14 @@ with tab_realestate:
                 import plotly.graph_objects as go
                 fig = go.Figure()
                 fig.add_trace(go.Bar(
-                    y=[purp], x=[paid], name='Đã trả', orientation='h', marker=dict(color='#4ade80')
+                    y=[purp], x=[paid], name='Đã trả', orientation='h', marker=dict(color='#2E7D32')
                 ))
                 fig.add_trace(go.Bar(
-                    y=[purp], x=[bal], name='Còn lại', orientation='h', marker=dict(color='#f87171')
+                    y=[purp], x=[bal], name='Còn lại', orientation='h', marker=dict(color='#D32F2F')
                 ))
                 fig.update_layout(
                     barmode='stack', margin=dict(l=0, r=0, t=10, b=0), height=50,
-                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#333333",
                     showlegend=False,
                     xaxis=dict(showticklabels=False, showgrid=False, zeroline=False),
                     yaxis=dict(showticklabels=False, showgrid=False, zeroline=False)
@@ -1715,10 +1826,10 @@ with tab_realestate:
                 x="Kỳ", 
                 y=["Gốc phải trả", "Lãi phải trả"], 
                 title="Cơ cấu Gốc & Lãi theo thời gian",
-                color_discrete_map={"Gốc phải trả": "#4ade80", "Lãi phải trả": "#f59e0b"}
+                color_discrete_map={"Gốc phải trả": "#2E7D32", "Lãi phải trả": "#D32F2F"}
             )
             fig_sched.update_layout(
-                barmode='stack', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#f8fafc",
+                barmode='stack', paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#333333",
                 legend_title_text="", xaxis_title="Kỳ thanh toán", yaxis_title="Số tiền (VND)"
             )
             st.plotly_chart(fig_sched, use_container_width=True)
@@ -1749,9 +1860,12 @@ with tab_realestate:
                     st.session_state.editing_debt = selected_debt.to_dict()
             with de2:
                 if st.button("❌ XÓA KHOẢN VAY", key="btn_del_debt", use_container_width=True):
-                    supabase.table("debts").delete().eq("id", selected_debt['id']).execute()
-                    st.toast("🗑️ Đã xóa!", icon="✅")
-                    clear_cache_and_rerun()
+                    try:
+                        supabase.table("debts").delete().eq("id", selected_debt['id']).execute()
+                        st.toast("🗑️ Đã xóa!", icon="✅")
+                        clear_cache_and_rerun()
+                    except Exception as e:
+                        st.error(f'Lỗi thao tác dữ liệu: {e}')
         if st.session_state.get("editing_debt"):
             modal_edit_debt()
     else:
