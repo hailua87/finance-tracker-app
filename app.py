@@ -47,7 +47,7 @@ st.markdown("""
         font-size: 2.2rem; font-weight: 700; color: #f8fafc; 
         border-left: 6px solid #10b981; padding-left: 15px; 
         margin-bottom: 15px; 
-        margin-top: 0px; /* Bỏ margin âm trên điện thoại */
+        margin-top: 0px; 
     }
     
     /* 💻 TỐI ƯU CHO PC/LAPTOP: Tự động thu gọn lại khoảng cách */
@@ -401,6 +401,8 @@ def modal_debt():
         with c5: grace_period = st.number_input("Số tháng Ân hạn gốc", min_value=0, step=1, value=1)
         with c6: lai_suat = st.number_input("Lãi suất (%/năm)", min_value=0.0, step=0.1, format="%.2f", value=7.3)
             
+        st.info("💡 Hệ thống tự động xử lý thuật toán ân hạn gốc và tính dư nợ theo ngày thanh toán cố định.")
+        
         if st.form_submit_button("LƯU KHOẢN VAY", use_container_width=True):
             tien_vay_ban_dau = parse_smart_amount(vay_str)
             if tien_vay_ban_dau <= 0: st.error("⚠️ Số tiền vay không hợp lệ!")
@@ -573,16 +575,19 @@ with tab_home:
         no_khoan_vay = 0
         total_monthly_debt_payment = 0
 
+    # FIX LOGIC: Dùng .str.contains('Mua') thay vì == 'Mua'
     tong_cp = 0
     try:
         res_stk = supabase.table("stocks").select("*").execute()
         if res_stk.data:
             df_stk = pd.DataFrame(res_stk.data)
             for ticker, grp in df_stk.groupby('ticker'):
-                buy_vol = grp[grp['action'] == 'Mua']['volume'].sum()
-                sell_vol = grp[grp['action'] == 'Bán']['volume'].sum()
+                buy_rows = grp[grp['action'].str.contains('Mua', na=False, case=False)]
+                sell_rows = grp[grp['action'].str.contains('Bán', na=False, case=False)]
+                buy_vol = buy_rows['volume'].sum()
+                sell_vol = sell_rows['volume'].sum()
                 net_vol = buy_vol - sell_vol
-                buy_val = (grp[grp['action'] == 'Mua']['volume'] * grp[grp['action'] == 'Mua']['price']).sum()
+                buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
                 avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
                 tong_cp += net_vol * avg_price
     except: tong_cp = 0
@@ -593,10 +598,12 @@ with tab_home:
         if res_fund.data:
             df_fund = pd.DataFrame(res_fund.data)
             for ticker, grp in df_fund.groupby('ticker'):
-                buy_vol = grp[grp['action'] == 'Mua']['volume'].sum()
-                sell_vol = grp[grp['action'] == 'Bán']['volume'].sum()
+                buy_rows = grp[grp['action'].str.contains('Mua', na=False, case=False)]
+                sell_rows = grp[grp['action'].str.contains('Bán', na=False, case=False)]
+                buy_vol = buy_rows['volume'].sum()
+                sell_vol = sell_rows['volume'].sum()
                 net_vol = buy_vol - sell_vol
-                buy_val = (grp[grp['action'] == 'Mua']['volume'] * grp[grp['action'] == 'Mua']['price']).sum()
+                buy_val = (buy_rows['volume'] * buy_rows['price']).sum()
                 avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
                 tong_ccq += net_vol * avg_price
     except: tong_ccq = 0
@@ -607,10 +614,12 @@ with tab_home:
         if res_gold.data:
             df_gold = pd.DataFrame(res_gold.data)
             for gtype, grp in df_gold.groupby('gold_type'):
-                buy_vol = grp[grp['action'] == 'Mua']['quantity'].sum()
-                sell_vol = grp[grp['action'] == 'Bán']['quantity'].sum()
+                buy_rows = grp[grp['action'].str.contains('Mua', na=False, case=False)]
+                sell_rows = grp[grp['action'].str.contains('Bán', na=False, case=False)]
+                buy_vol = buy_rows['quantity'].sum()
+                sell_vol = sell_rows['quantity'].sum()
                 net_vol = buy_vol - sell_vol
-                buy_val = (grp[grp['action'] == 'Mua']['quantity'] * grp[grp['action'] == 'Mua']['price']).sum()
+                buy_val = (buy_rows['quantity'] * buy_rows['price']).sum()
                 avg_price = (buy_val / buy_vol) if buy_vol > 0 else 0
                 tong_vang += net_vol * avg_price
     except: tong_vang = 0
@@ -850,6 +859,7 @@ with tab_cashflow:
 with tab_invest:
     subtab_stock, subtab_ccq, subtab_gold = st.tabs(["📈 CỔ PHIẾU", "📊 CHỨNG CHỈ QUỸ", "🥇 VÀNG TÍCH SẢN"])
     
+    # --- SUBTAB 1: CỔ PHIẾU ---
     with subtab_stock:
         col_btn2, _ = st.columns([1.5, 3])
         with col_btn2:
@@ -867,8 +877,8 @@ with tab_invest:
             if not df_stk.empty and 'ticker' in df_stk.columns:
                 summary_list = []
                 for ticker, grp in df_stk.groupby('ticker'):
-                    buy_rows = grp[grp['action'] == 'Mua']
-                    sell_rows = grp[grp['action'] == 'Bán']
+                    buy_rows = grp[grp['action'].str.contains('Mua', na=False, case=False)]
+                    sell_rows = grp[grp['action'].str.contains('Bán', na=False, case=False)]
                     buy_vol = buy_rows['volume'].sum()
                     sell_vol = sell_rows['volume'].sum()
                     net_vol = buy_vol - sell_vol
@@ -897,6 +907,7 @@ with tab_invest:
                     time.sleep(1)
                     st.rerun()
 
+    # --- SUBTAB 2: CHỨNG CHỈ QUỸ ---
     with subtab_ccq:
         col_btn_ccq, _ = st.columns([1.5, 3])
         with col_btn_ccq:
@@ -914,8 +925,8 @@ with tab_invest:
             if not df_fund.empty and 'ticker' in df_fund.columns:
                 fund_summary = []
                 for ticker, grp in df_fund.groupby('ticker'):
-                    buy_rows = grp[grp['action'] == 'Mua']
-                    sell_rows = grp[grp['action'] == 'Bán']
+                    buy_rows = grp[grp['action'].str.contains('Mua', na=False, case=False)]
+                    sell_rows = grp[grp['action'].str.contains('Bán', na=False, case=False)]
                     buy_vol = buy_rows['volume'].sum()
                     sell_vol = sell_rows['volume'].sum()
                     net_vol = buy_vol - sell_vol
@@ -944,6 +955,7 @@ with tab_invest:
                     time.sleep(1)
                     st.rerun()
 
+    # --- SUBTAB 3: VÀNG ---
     with subtab_gold:
         col_btn_gold, _ = st.columns([1.5, 3])
         with col_btn_gold:
@@ -961,8 +973,8 @@ with tab_invest:
             if not df_gold.empty and 'gold_type' in df_gold.columns:
                 gold_summary = []
                 for gtype, grp in df_gold.groupby('gold_type'):
-                    buy_rows = grp[grp['action'] == 'Mua']
-                    sell_rows = grp[grp['action'] == 'Bán']
+                    buy_rows = grp[grp['action'].str.contains('Mua', na=False, case=False)]
+                    sell_rows = grp[grp['action'].str.contains('Bán', na=False, case=False)]
                     buy_vol = buy_rows['quantity'].sum()
                     sell_vol = sell_rows['quantity'].sum()
                     net_vol = buy_vol - sell_vol
