@@ -977,24 +977,27 @@ def render_net_worth_dashboard(data, df_cf, current_member):
     # 2. Safe Column Manipulation
     if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
         df_cf_f = df_cf_f.copy()
-        df_cf_f['date'] = pd.to_datetime(df_cf_f['created_at']).dt.date
+        try:
+            df_cf_f['date'] = pd.to_datetime(df_cf_f['created_at']).dt.date
+        except Exception:
+            df_cf_f['date'] = pd.Series(dtype='object')
     else:
         # Ensure 'date' column exists even if empty to prevent downstream chart crashes
         df_cf_f['date'] = pd.Series(dtype='object')
         
-        tm_df = df_cf_f[(df_cf_f['date'] >= this_month_start) & (df_cf_f['date'] <= today)].copy()
-        if not tm_df.empty:
-            tm_df['amount'] = pd.to_numeric(tm_df['amount'], errors='coerce').fillna(0)
-            tm_inc = tm_df[tm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
-            tm_exp = tm_df[tm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
-            this_month_savings = tm_inc - tm_exp
-            
-        lm_df = df_cf_f[(df_cf_f['date'] >= last_month_start) & (df_cf_f['date'] <= last_month_end)].copy()
-        if not lm_df.empty:
-            lm_df['amount'] = pd.to_numeric(lm_df['amount'], errors='coerce').fillna(0)
-            lm_inc = lm_df[lm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
-            lm_exp = lm_df[lm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
-            last_month_savings = lm_inc - lm_exp
+    tm_df = df_cf_f[(df_cf_f['date'] >= this_month_start) & (df_cf_f['date'] <= today)].copy()
+    if not tm_df.empty:
+        tm_df['amount'] = pd.to_numeric(tm_df['amount'], errors='coerce').fillna(0)
+        tm_inc = tm_df[tm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
+        tm_exp = tm_df[tm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
+        this_month_savings = tm_inc - tm_exp
+        
+    lm_df = df_cf_f[(df_cf_f['date'] >= last_month_start) & (df_cf_f['date'] <= last_month_end)].copy()
+    if not lm_df.empty:
+        lm_df['amount'] = pd.to_numeric(lm_df['amount'], errors='coerce').fillna(0)
+        lm_inc = lm_df[lm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
+        lm_exp = lm_df[lm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
+        last_month_savings = lm_inc - lm_exp
             
     mom_pct = 0
     mom_text = "Không có dữ liệu tháng trước"
