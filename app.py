@@ -18,9 +18,10 @@ st.set_page_config(page_title="Nhà Quê Tập Chi Tiêu", page_icon="💰", lay
 # --- BẢO MẬT BẰNG MẬT KHẨU ---
 def check_password():
     def password_entered():
-        if st.session_state["password"] == st.secrets.get("APP_PASSWORD", "123456"):
+        if st.session_state.get("password", "") == st.secrets.get("APP_PASSWORD", "123456"):
             st.session_state["password_correct"] = True
-            del st.session_state["password"]
+            if "password" in st.session_state:
+                del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
 
