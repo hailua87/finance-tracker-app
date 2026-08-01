@@ -682,6 +682,13 @@ def modal_edit_debt():
 # =====================================================================
 # 7. QUICK ACTION BUTTONS
 # =====================================================================
+st.markdown("""
+    <div style='padding: 10px 0px 20px 0px;'>
+        <h1 style='color: #ffffff; font-size: 2.2rem; margin-bottom: 0px;'>💎 QUẢN LÝ TÀI CHÍNH GIA ĐÌNH</h1>
+        <p style='color: #94a3b8; font-size: 1rem; margin-top: 5px;'>Hệ thống theo dõi tài sản, đầu tư & dòng tiền thông minh</p>
+    </div>
+""", unsafe_allow_html=True)
+
 st.markdown('<div class="metric-title" style="margin-bottom:10px;">⚡ THAO TÁC NHANH</div>', unsafe_allow_html=True)
 qa1, qa2, qa3, qa4 = st.columns(4)
 with qa1:
