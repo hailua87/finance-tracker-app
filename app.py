@@ -683,7 +683,7 @@ def modal_edit_debt():
 # 7. QUICK ACTION BUTTONS
 # =====================================================================
 st.markdown('<div class="metric-title" style="margin-bottom:10px;">⚡ THAO TÁC NHANH</div>', unsafe_allow_html=True)
-qa1, qa2, qa3 = st.columns(3)
+qa1, qa2, qa3, qa4 = st.columns(4)
 with qa1:
     st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
     if st.button("➕ Chi tiêu", key="qa_cf", use_container_width=True): modal_cashflow()
@@ -693,6 +693,10 @@ with qa2:
     if st.button("📈 Cổ phiếu", key="qa_stk", use_container_width=True): modal_stock()
     st.markdown('</div>', unsafe_allow_html=True)
 with qa3:
+    st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
+    if st.button("📊 Chứng chỉ quỹ", key="qa_ccq", use_container_width=True): modal_ccq()
+    st.markdown('</div>', unsafe_allow_html=True)
+with qa4:
     st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
     if st.button("💰 Vàng", key="qa_gld", use_container_width=True): modal_gold()
     st.markdown('</div>', unsafe_allow_html=True)
