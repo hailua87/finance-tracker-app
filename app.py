@@ -864,44 +864,14 @@ with tab_cashflow:
     with mc2:
         st.markdown(f'<div class="ios-card"><div class="savings-goal-title" style="color:#4ade80;">🤑 TỔNG THU</div><div style="font-size:2rem;font-weight:bold;">{tong_thu:,.0f} ₫</div></div>', unsafe_allow_html=True)
 
-    with st.expander("⚙️ CẤU HÌNH NGÂN SÁCH & LỌC DỮ LIỆU", expanded=False):
-        bt1, bt2 = st.tabs(["📊 Lọc giao dịch", "⚙️ Cấu hình Ngân sách"])
-        with bt2:
-            st.markdown("### Thiết lập Ngân sách Chi tiêu Tháng")
-            bg1, bg2 = st.columns(2)
-            for idx_cat, cat in enumerate(EXPENSE_CATS):
-                with (bg1 if idx_cat % 2 == 0 else bg2):
-                    st.session_state.cat_budgets[cat] = st.number_input(
-                        f"{cat}", value=st.session_state.cat_budgets.get(cat, 3000000),
-                        step=500000, format="%d", key=f"budget_{idx_cat}")
-        with bt1:
-            if not df_period.empty:
-                df_sorted = df_period.sort_values('created_at', ascending=False)
-                for _, row in df_sorted.iterrows():
-                    cat = row.get('category', '')
-                    is_income = (cat == 'Lương/Thu nhập')
-                    color_cls = "text-green" if is_income else "text-red"
-                    sign = "+" if is_income else "-"
-                    amt = safe_float(row.get('amount'))
-                    dt_val = row.get('created_at')
-                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y %H:%M') if pd.notna(dt_val) else ''
-                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
-                    acc = row.get('account', '')
-                    st.markdown(f'''
-                    <div class="fintech-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div class="fintech-card-title">{cat}</div>
-                                <div class="fintech-card-subtitle">{dt_str} • {acc}</div>{note_str}
-                            </div>
-                            <div class="fintech-card-amount {color_cls}">
-                                {sign}{amt:,.0f} ₫
-                            </div>
-                        </div>
-                    </div>
-                    ''', unsafe_allow_html=True)
-            else:
-                st.info("Không có giao dịch trong kỳ.")
+    with st.expander("⚙️ CẤU HÌNH NGÂN SÁCH", expanded=False):
+        st.markdown("### Thiết lập Ngân sách Chi tiêu Tháng")
+        bg1, bg2 = st.columns(2)
+        for idx_cat, cat in enumerate(EXPENSE_CATS):
+            with (bg1 if idx_cat % 2 == 0 else bg2):
+                st.session_state.cat_budgets[cat] = st.number_input(
+                    f"{cat}", value=st.session_state.cat_budgets.get(cat, 3000000),
+                    step=500000, format="%d", key=f"budget_{idx_cat}")
 
     st.markdown("<br/>", unsafe_allow_html=True)
     col_pie, col_budget = st.columns([1, 1])
@@ -942,6 +912,40 @@ with tab_cashflow:
 <div class="progress-container" style="margin-top:8px;"><div class="progress-bar-fill" style="width:{min(pct,100)}%;background-color:{color};"></div></div>
 </div>"""
                     st.markdown(card_bg_html, unsafe_allow_html=True)
+
+    st.markdown("<br/>", unsafe_allow_html=True)
+    st.subheader(f"📋 Chi tiết giao dịch {f'- {selected_cat}' if selected_cat else ''}")
+    df_show = df_period.copy()
+    if selected_cat:
+        df_show = df_show[df_show['category'] == selected_cat]
+        
+    if not df_show.empty:
+        df_sorted = df_show.sort_values('created_at', ascending=False)
+        for _, row in df_sorted.iterrows():
+            cat = row.get('category', '')
+            is_income = (cat == 'Lương/Thu nhập')
+            color_cls = "text-green" if is_income else "text-red"
+            sign = "+" if is_income else "-"
+            amt = safe_float(row.get('amount'))
+            dt_val = row.get('created_at')
+            dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y %H:%M') if pd.notna(dt_val) else ''
+            note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
+            acc = row.get('account', '')
+            st.markdown(f'''
+            <div class="fintech-card">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                        <div class="fintech-card-title">{cat}</div>
+                        <div class="fintech-card-subtitle">{dt_str} • {acc}</div>{note_str}
+                    </div>
+                    <div class="fintech-card-amount {color_cls}">
+                        {sign}{amt:,.0f} ₫
+                    </div>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+    else:
+        st.info("Không có giao dịch phù hợp.")
 
 # =====================================================================
 # TAB 2: ĐẦU TƯ
