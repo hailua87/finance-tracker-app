@@ -204,7 +204,6 @@ with st.sidebar:
     )
 
 current_member = st.session_state.current_member
-st.markdown(f'<div class="hallmark-header">NHÀ QUÊ TẬP CHI TIÊU{f" <span style=font-size:1.2rem;>({current_member})</span>" if current_member != "Tất cả" else ""}</div>', unsafe_allow_html=True)
 
 # =====================================================================
 # 6. ALL @st.dialog FUNCTIONS
@@ -683,30 +682,20 @@ def modal_edit_debt():
 # 7. QUICK ACTION BUTTONS
 # =====================================================================
 st.markdown("""
-    <div style='padding: 10px 0px 20px 0px;'>
-        <h1 style='color: #ffffff; font-size: 2.2rem; margin-bottom: 0px;'>💎 QUẢN LÝ TÀI CHÍNH GIA ĐÌNH</h1>
-        <p style='color: #94a3b8; font-size: 1rem; margin-top: 5px;'>Hệ thống theo dõi tài sản, đầu tư & dòng tiền thông minh</p>
+    <div style='padding: 10px 0px 10px 0px; text-align: center;'>
+        <h1 style='color: #ffffff; font-size: 2.0rem; margin-bottom: 0px;'>💎 QUẢN LÝ TÀI CHÍNH GIA ĐÌNH</h1>
     </div>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="metric-title" style="margin-bottom:10px;">⚡ THAO TÁC NHANH</div>', unsafe_allow_html=True)
 qa1, qa2, qa3, qa4 = st.columns(4)
 with qa1:
-    st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("➕ Chi tiêu", key="qa_cf", use_container_width=True): modal_cashflow()
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button("➕\nChi tiêu", key="qa_cf", use_container_width=True): modal_cashflow()
 with qa2:
-    st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("📈 Cổ phiếu", key="qa_stk", use_container_width=True): modal_stock()
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button("📈\nCổ phiếu", key="qa_stk", use_container_width=True): modal_stock()
 with qa3:
-    st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("📊 Chứng chỉ quỹ", key="qa_ccq", use_container_width=True): modal_ccq()
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button("📊\nCC Quỹ", key="qa_ccq", use_container_width=True): modal_ccq()
 with qa4:
-    st.markdown('<div class="app-icon-btn">', unsafe_allow_html=True)
-    if st.button("💰 Vàng", key="qa_gld", use_container_width=True): modal_gold()
-    st.markdown('</div>', unsafe_allow_html=True)
+    if st.button("💰\nVàng", key="qa_gld", use_container_width=True): modal_gold()
 
 st.markdown("<br/>", unsafe_allow_html=True)
 
@@ -845,13 +834,90 @@ no_khoan_vay = nw_data['liabilities']
 net_worth = nw_data['net_worth']
 
 
-def render_net_worth_dashboard(data):
+def render_net_worth_dashboard(data, df_cf, current_member):
+    import datetime
+    today = datetime.date.today()
+    this_month_start = today.replace(day=1)
+    last_month_end = this_month_start - datetime.timedelta(days=1)
+    last_month_start = last_month_end.replace(day=1)
+    
+    df_cf_f = filter_by_member(df_cf, current_member, col='account')
+    
+    this_month_savings = 0
+    last_month_savings = 0
+    if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
+        df_cf_f = df_cf_f.copy()
+        df_cf_f['date'] = pd.to_datetime(df_cf_f['created_at']).dt.date
+        
+        tm_df = df_cf_f[(df_cf_f['date'] >= this_month_start) & (df_cf_f['date'] <= today)].copy()
+        if not tm_df.empty:
+            tm_df['amount'] = pd.to_numeric(tm_df['amount'], errors='coerce').fillna(0)
+            tm_inc = tm_df[tm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
+            tm_exp = tm_df[tm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
+            this_month_savings = tm_inc - tm_exp
+            
+        lm_df = df_cf_f[(df_cf_f['date'] >= last_month_start) & (df_cf_f['date'] <= last_month_end)].copy()
+        if not lm_df.empty:
+            lm_df['amount'] = pd.to_numeric(lm_df['amount'], errors='coerce').fillna(0)
+            lm_inc = lm_df[lm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
+            lm_exp = lm_df[lm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
+            last_month_savings = lm_inc - lm_exp
+            
+    mom_pct = 0
+    mom_text = "Không có dữ liệu tháng trước"
+    mom_color = "#94a3b8"
+    if last_month_savings > 0:
+        mom_pct = ((this_month_savings - last_month_savings) / last_month_savings) * 100
+        if mom_pct > 0:
+            mom_text = f"Tăng {mom_pct:.1f}% so với tháng trước"
+            mom_color = "#4ade80"
+        else:
+            mom_text = f"Giảm {abs(mom_pct):.1f}% so với tháng trước"
+            mom_color = "#f87171"
+    elif last_month_savings < 0 and this_month_savings > 0:
+        mom_text = "Cải thiện so với tháng trước (âm)"
+        mom_color = "#4ade80"
+        
+    st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.2rem;">💡 Quick Insights</div>', unsafe_allow_html=True)
+    st.markdown(f'''
+    <div class="ios-card" style="padding: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {mom_color};">
+        <div>
+            <div style="font-size: 0.9rem; color: #94a3b8;">Tiết kiệm tháng này</div>
+            <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc;">{this_month_savings:,.0f} VNĐ</div>
+        </div>
+        <div style="text-align: right;">
+            <div style="font-size: 0.9rem; color: {mom_color}; font-weight: 600;">{mom_text}</div>
+        </div>
+    </div>
+    ''', unsafe_allow_html=True)
+
+    # Leverage Ratio
+    total_assets = sum(data['assets'].values())
+    total_debts = data['liabilities']
+    leverage_ratio = (total_debts / total_assets * 100) if total_assets > 0 else 0
+    
+    lr_color = "#4ade80" # Safe
+    lr_text = "An toàn"
+    if leverage_ratio > 50:
+        lr_color = "#ef4444" # Danger
+        lr_text = "Rủi ro cao"
+    elif leverage_ratio >= 30:
+        lr_color = "#f59e0b" # Warning
+        lr_text = "Cảnh báo"
+        
     st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.5rem;">💰 Tổng Quan Tài Sản Ròng</div>', unsafe_allow_html=True)
     
-    st.markdown(f"""<div class="ios-card" style="background: var(--primary-navy); border-left: 4px solid var(--accent-gold); padding: 25px; margin-bottom: 25px;">
-<div class="metric-title" style="color: var(--accent-gold);">TÀI SẢN RÒNG (NET WORTH)</div>
-<div style="font-family: 'Inter', sans-serif; font-size: 3rem; font-weight: 700; color: #f8fafc;">{data['net_worth']:,.0f} VNĐ</div>
-</div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
+        <div class="ios-card" style="flex: 2; min-width: 250px; background: var(--primary-navy); border-left: 4px solid var(--accent-gold); padding: 25px;">
+            <div class="metric-title" style="color: var(--accent-gold);">TÀI SẢN RÒNG (NET WORTH)</div>
+            <div style="font-family: 'Inter', sans-serif; font-size: 2.5rem; font-weight: 700; color: #f8fafc;">{data['net_worth']:,.0f} VNĐ</div>
+        </div>
+        <div class="ios-card" style="flex: 1; min-width: 200px; padding: 25px; border-left: 4px solid {lr_color};">
+            <div class="metric-title" style="color: #94a3b8;">TỶ LỆ NỢ / TÀI SẢN</div>
+            <div style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: {lr_color};">{leverage_ratio:.1f}%</div>
+            <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">Mức độ: <span style="color:{lr_color}; font-weight:600;">{lr_text}</span></div>
+        </div>
+    </div>""", unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
     with col1:
@@ -897,7 +963,7 @@ tab_home, tab_cashflow, tab_invest, tab_savings, tab_realestate = st.tabs([
 # TAB 0: TỔNG QUAN
 # =====================================================================
 with tab_home:
-    render_net_worth_dashboard(nw_data)
+    render_net_worth_dashboard(nw_data, df_cf, current_member)
 
 # =====================================================================
 # TAB 1: DÒNG TIỀN
@@ -1063,53 +1129,30 @@ with tab_invest:
                 st.info("Chưa có vị thế cổ phiếu.")
         with stk_hist_tab:
             if not df_stk_f.empty:
-                df_stk_sorted = df_stk_f.sort_values('trade_date', ascending=False)
-                for _, row in df_stk_sorted.iterrows():
-                    act = str(row.get('action', ''))
-                    color_cls = "text-green" if "Mua" in act else "text-yellow"
-                    sign = "-" if "Mua" in act else "+"
-                    vol = safe_float(row.get('volume'))
-                    prc = safe_float(row.get('price'))
-                    val = vol * prc
-                    dt_val = row.get('trade_date')
-                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
-                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
-                    action = str(row.get('action', ''))
-                    color_cls = "text-green" if "Mua" in action else "text-yellow"
-                    sign = "-" if "Mua" in action else "+"
-                    volume = safe_float(row.get('volume'))
-                    price = safe_float(row.get('price'))
-                    val = volume * price
-                    dt_val = row.get('trade_date')
-                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
-                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
-                    st.markdown(f'''
-                    <div class="fintech-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{action}</span></div>
-                                <div class="fintech-card-subtitle">{dt_str} • KL: {volume:,.0f} • Giá: {price:,.0f} ₫</div>{note_str}
-                            </div>
-                            <div class="fintech-card-amount {color_cls}">
-                                {sign}{val:,.0f} ₫
-                            </div>
-                        </div>
-                    </div>
-                    ''', unsafe_allow_html=True)
+                df_stk_sorted = df_stk_f.sort_values('trade_date', ascending=False).copy()
+                df_stk_sorted['Ngày'] = pd.to_datetime(df_stk_sorted['trade_date']).dt.strftime('%d/%m/%Y')
+                df_stk_sorted['Mã'] = df_stk_sorted['ticker']
+                df_stk_sorted['Lệnh'] = df_stk_sorted['action']
+                df_stk_sorted['KL'] = df_stk_sorted['volume'].apply(lambda x: f"{x:,.0f}")
+                df_stk_sorted['Giá'] = df_stk_sorted['price'].apply(lambda x: f"{x:,.0f}")
+                df_stk_sorted['Thành tiền'] = (pd.to_numeric(df_stk_sorted['volume'], errors='coerce') * pd.to_numeric(df_stk_sorted['price'], errors='coerce')).apply(lambda x: f"{x:,.0f}")
+                
+                st.dataframe(df_stk_sorted[['Ngày', 'Mã', 'Lệnh', 'KL', 'Giá', 'Thành tiền']], use_container_width=True, hide_index=True)
 
-                options_stk = [f"{r.get('ticker','')} | {r.get('action','')} | KL:{r.get('volume','')} | {str(r.get('trade_date',''))[:10]}" for _, r in df_stk_f.iterrows()]
-                sel_idx_stk = st.selectbox("Chọn GD để sửa/xóa", range(len(options_stk)), format_func=lambda i: options_stk[i], key="sel_stk")
-                ce1, ce2 = st.columns(2)
-                with ce1:
-                    if st.button("✏️ SỬA", key="btn_edit_stk", use_container_width=True):
-                        st.session_state.editing_stock = df_stk_f.iloc[sel_idx_stk].to_dict()
-                with ce2:
-                    if st.button("❌ XÓA", key="btn_del_stk", use_container_width=True):
-                        supabase.table("stocks").delete().eq("id", df_stk_f.iloc[sel_idx_stk]['id']).execute()
-                        st.toast("🗑️ Đã xóa!", icon="✅")
-                        clear_cache_and_rerun()
-                if st.session_state.get("editing_stock"):
-                    modal_edit_stock()
+                with st.expander("✏️ SỬA / XÓA GIAO DỊCH", expanded=False):
+                    options_stk = [f"{r.get('ticker','')} | {r.get('action','')} | KL:{r.get('volume','')} | {str(r.get('trade_date',''))[:10]}" for _, r in df_stk_f.iterrows()]
+                    sel_idx_stk = st.selectbox("Chọn GD để sửa/xóa", range(len(options_stk)), format_func=lambda i: options_stk[i], key="sel_stk")
+                    ce1, ce2 = st.columns(2)
+                    with ce1:
+                        if st.button("✏️ SỬA", key="btn_edit_stk", use_container_width=True):
+                            st.session_state.editing_stock = df_stk_f.iloc[sel_idx_stk].to_dict()
+                    with ce2:
+                        if st.button("❌ XÓA", key="btn_del_stk", use_container_width=True):
+                            supabase.table("stocks").delete().eq("id", df_stk_f.iloc[sel_idx_stk]['id']).execute()
+                            st.toast("🗑️ Đã xóa!", icon="✅")
+                            clear_cache_and_rerun()
+                    if st.session_state.get("editing_stock"):
+                        modal_edit_stock()
             else:
                 st.info("Chưa có giao dịch cổ phiếu.")
 
@@ -1138,43 +1181,30 @@ with tab_invest:
                 st.info("Chưa có vị thế CCQ.")
         with ccq_hist_tab:
             if not df_ccq_f.empty:
-                df_ccq_sorted = df_ccq_f.sort_values('trade_date', ascending=False)
-                for _, row in df_ccq_sorted.iterrows():
-                    act = str(row.get('action', ''))
-                    color_cls = "text-green" if "Mua" in act else "text-yellow"
-                    sign = "-" if "Mua" in act else "+"
-                    vol = float(row.get('volume', 0) or 0)
-                    prc = float(row.get('price', 0) or 0)
-                    val = vol * prc
-                    dt_val = row.get('trade_date')
-                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
-                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
-                    st.markdown(f'''
-                    <div class="fintech-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div class="fintech-card-title">{row.get('ticker', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px;">{act}</span></div>
-                                <div class="fintech-card-subtitle">{dt_str} • SL: {vol:,.2f} • NAV: {prc:,.0f}</div>{note_str}
-                            </div>
-                            <div class="fintech-card-amount {color_cls}">
-                                {sign}{val:,.0f} ₫
-                            </div>
-                        </div>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                options_ccq = [f"{r.get('ticker','')} | {r.get('action','')} | {str(r.get('trade_date',''))[:10]}" for _, r in df_ccq_f.iterrows()]
-                sel_idx_ccq = st.selectbox("Chọn GD để sửa/xóa", range(len(options_ccq)), format_func=lambda i: options_ccq[i], key="sel_ccq")
-                ce1, ce2 = st.columns(2)
-                with ce1:
-                    if st.button("✏️ SỬA", key="btn_edit_ccq", use_container_width=True):
-                        st.session_state.editing_ccq = df_ccq_f.iloc[sel_idx_ccq].to_dict()
-                with ce2:
-                    if st.button("❌ XÓA", key="btn_del_ccq", use_container_width=True):
-                        supabase.table("ccq_funds").delete().eq("id", df_ccq_f.iloc[sel_idx_ccq]['id']).execute()
-                        st.toast("🗑️ Đã xóa!", icon="✅")
-                        clear_cache_and_rerun()
-                if st.session_state.get("editing_ccq"):
-                    modal_edit_ccq()
+                df_ccq_sorted = df_ccq_f.sort_values('trade_date', ascending=False).copy()
+                df_ccq_sorted['Ngày'] = pd.to_datetime(df_ccq_sorted['trade_date']).dt.strftime('%d/%m/%Y')
+                df_ccq_sorted['Mã Quỹ'] = df_ccq_sorted['ticker']
+                df_ccq_sorted['Lệnh'] = df_ccq_sorted['action']
+                df_ccq_sorted['Số lượng'] = pd.to_numeric(df_ccq_sorted['volume'], errors='coerce').apply(lambda x: f"{x:,.2f}")
+                df_ccq_sorted['Giá (NAV)'] = pd.to_numeric(df_ccq_sorted['price'], errors='coerce').apply(lambda x: f"{x:,.0f}")
+                df_ccq_sorted['Thành tiền'] = (pd.to_numeric(df_ccq_sorted['volume'], errors='coerce') * pd.to_numeric(df_ccq_sorted['price'], errors='coerce')).apply(lambda x: f"{x:,.0f}")
+                
+                st.dataframe(df_ccq_sorted[['Ngày', 'Mã Quỹ', 'Lệnh', 'Số lượng', 'Giá (NAV)', 'Thành tiền']], use_container_width=True, hide_index=True)
+
+                with st.expander("✏️ SỬA / XÓA GIAO DỊCH", expanded=False):
+                    options_ccq = [f"{r.get('ticker','')} | {r.get('action','')} | {str(r.get('trade_date',''))[:10]}" for _, r in df_ccq_f.iterrows()]
+                    sel_idx_ccq = st.selectbox("Chọn GD để sửa/xóa", range(len(options_ccq)), format_func=lambda i: options_ccq[i], key="sel_ccq")
+                    ce1, ce2 = st.columns(2)
+                    with ce1:
+                        if st.button("✏️ SỬA", key="btn_edit_ccq", use_container_width=True):
+                            st.session_state.editing_ccq = df_ccq_f.iloc[sel_idx_ccq].to_dict()
+                    with ce2:
+                        if st.button("❌ XÓA", key="btn_del_ccq", use_container_width=True):
+                            supabase.table("ccq_funds").delete().eq("id", df_ccq_f.iloc[sel_idx_ccq]['id']).execute()
+                            st.toast("🗑️ Đã xóa!", icon="✅")
+                            clear_cache_and_rerun()
+                    if st.session_state.get("editing_ccq"):
+                        modal_edit_ccq()
             else:
                 st.info("Chưa có giao dịch CCQ.")
 
@@ -1203,43 +1233,30 @@ with tab_invest:
                 st.info("Chưa có vị thế Vàng.")
         with gld_hist_tab:
             if not df_gold_f.empty:
-                df_gold_sorted = df_gold_f.sort_values('trade_date', ascending=False)
-                for _, row in df_gold_sorted.iterrows():
-                    act = str(row.get('action', ''))
-                    color_cls = "text-green" if "Mua" in act else "text-yellow"
-                    sign = "-" if "Mua" in act else "+"
-                    qty = float(row.get('quantity', 0) or 0)
-                    prc = float(row.get('price', 0) or 0)
-                    val = qty * prc
-                    dt_val = row.get('trade_date')
-                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
-                    note_str = f"<div class='fintech-card-note'>{row.get('note', '')}</div>" if row.get('note') else ""
-                    st.markdown(f'''
-                    <div class="fintech-card" style="border-left: 4px solid var(--accent-gold);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div class="fintech-card-title" style="color: var(--accent-gold);">{row.get('gold_type', '')} <span style="font-size:0.85rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px; color: #f8fafc;">{act}</span></div>
-                                <div class="fintech-card-subtitle">{dt_str} • SL: {qty:,.2f} chỉ • Giá: {prc:,.0f} ₫</div>{note_str}
-                            </div>
-                            <div class="fintech-card-amount {color_cls}">
-                                {sign}{val:,.0f} ₫
-                            </div>
-                        </div>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                options_gld = [f"{r.get('gold_type','')} | {r.get('action','')} | {r.get('quantity','')} chỉ | {str(r.get('trade_date',''))[:10]}" for _, r in df_gold_f.iterrows()]
-                sel_idx_gld = st.selectbox("Chọn GD để sửa/xóa", range(len(options_gld)), format_func=lambda i: options_gld[i], key="sel_gld")
-                ce1, ce2 = st.columns(2)
-                with ce1:
-                    if st.button("✏️ SỬA", key="btn_edit_gld", use_container_width=True):
-                        st.session_state.editing_gold = df_gold_f.iloc[sel_idx_gld].to_dict()
-                with ce2:
-                    if st.button("❌ XÓA", key="btn_del_gld", use_container_width=True):
-                        supabase.table("gold").delete().eq("id", df_gold_f.iloc[sel_idx_gld]['id']).execute()
-                        st.toast("🗑️ Đã xóa!", icon="✅")
-                        clear_cache_and_rerun()
-                if st.session_state.get("editing_gold"):
-                    modal_edit_gold()
+                df_gold_sorted = df_gold_f.sort_values('trade_date', ascending=False).copy()
+                df_gold_sorted['Ngày'] = pd.to_datetime(df_gold_sorted['trade_date']).dt.strftime('%d/%m/%Y')
+                df_gold_sorted['Loại'] = df_gold_sorted['gold_type']
+                df_gold_sorted['Lệnh'] = df_gold_sorted['action']
+                df_gold_sorted['Số lượng (Chỉ)'] = pd.to_numeric(df_gold_sorted['quantity'], errors='coerce').apply(lambda x: f"{x:,.2f}")
+                df_gold_sorted['Giá'] = pd.to_numeric(df_gold_sorted['price'], errors='coerce').apply(lambda x: f"{x:,.0f}")
+                df_gold_sorted['Thành tiền'] = (pd.to_numeric(df_gold_sorted['quantity'], errors='coerce') * pd.to_numeric(df_gold_sorted['price'], errors='coerce')).apply(lambda x: f"{x:,.0f}")
+                
+                st.dataframe(df_gold_sorted[['Ngày', 'Loại', 'Lệnh', 'Số lượng (Chỉ)', 'Giá', 'Thành tiền']], use_container_width=True, hide_index=True)
+
+                with st.expander("✏️ SỬA / XÓA GIAO DỊCH", expanded=False):
+                    options_gld = [f"{r.get('gold_type','')} | {r.get('action','')} | {r.get('quantity','')} chỉ | {str(r.get('trade_date',''))[:10]}" for _, r in df_gold_f.iterrows()]
+                    sel_idx_gld = st.selectbox("Chọn GD để sửa/xóa", range(len(options_gld)), format_func=lambda i: options_gld[i], key="sel_gld")
+                    ce1, ce2 = st.columns(2)
+                    with ce1:
+                        if st.button("✏️ SỬA", key="btn_edit_gld", use_container_width=True):
+                            st.session_state.editing_gold = df_gold_f.iloc[sel_idx_gld].to_dict()
+                    with ce2:
+                        if st.button("❌ XÓA", key="btn_del_gld", use_container_width=True):
+                            supabase.table("gold").delete().eq("id", df_gold_f.iloc[sel_idx_gld]['id']).execute()
+                            st.toast("🗑️ Đã xóa!", icon="✅")
+                            clear_cache_and_rerun()
+                    if st.session_state.get("editing_gold"):
+                        modal_edit_gold()
             else:
                 st.info("Chưa có giao dịch Vàng.")
 
@@ -1309,40 +1326,29 @@ with tab_savings:
             fund_df = df_savings[df_savings['fund_owner'] == fund_name].copy()
             if not fund_df.empty:
                 fund_df['amount'] = pd.to_numeric(fund_df['amount'], errors='coerce').fillna(0)
-                for _, row in fund_df.iterrows():
-                    amt = safe_float(row.get('amount', 0))
-                    rate = safe_float(row.get('interest_rate', 0))
-                    trm = safe_float(row.get('term', 0))
-                    bank = row.get('bank', '')
-                    note = row.get('note', '')
-                    dt_val = row.get('deposit_date')
-                    dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
-                    note_html = f"<div class='fintech-card-note'>{note}</div>" if note else ""
-                    st.markdown(f'''
-                    <div class="fintech-card">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div class="fintech-card-title">🏦 {bank}</div>
-                                <div class="fintech-card-subtitle">Lãi suất: {rate}%/năm • Kỳ hạn: {trm:,.0f} tháng • Ngày gửi: {dt_str}</div>{note_html}
-                            </div>
-                            <div class="fintech-card-amount text-green">
-                                {amt:,.0f} ₫
-                            </div>
-                        </div>
-                    </div>
-                    ''', unsafe_allow_html=True)
-                safe_key = fund_name.replace(" ", "_")
-                options_sv = [f"#{r.get('id','')} | {safe_float(r.get('amount')):,.0f}₫ | LS:{r.get('interest_rate',0)}% | {safe_float(str(r.get('term',0)).replace(' Tháng', '').replace(' tháng', '')):.0f} Tháng" for _, r in fund_df.iterrows()]
-                sel_sv = st.selectbox("Chọn sổ tiết kiệm", range(len(options_sv)), format_func=lambda i: options_sv[i], key=f"sel_sv_{safe_key}")
-                sv_e1, sv_e2 = st.columns(2)
-                with sv_e1:
-                    if st.button("✏️ SỬA SỔ", key=f"btn_edit_sv_{safe_key}", use_container_width=True):
-                        st.session_state.editing_savings = fund_df.iloc[sel_sv].to_dict()
-                with sv_e2:
-                    if st.button("❌ TẤT TOÁN", key=f"btn_del_sv_{safe_key}", use_container_width=True):
-                        supabase.table("savings").delete().eq("id", fund_df.iloc[sel_sv]['id']).execute()
-                        st.toast("🗑️ Đã tất toán!", icon="✅")
-                        clear_cache_and_rerun()
+                
+                df_sv_display = fund_df.copy()
+                df_sv_display['Ngân hàng'] = df_sv_display['bank']
+                df_sv_display['Số tiền'] = df_sv_display['amount'].apply(lambda x: f"{x:,.0f}")
+                df_sv_display['Lãi suất'] = df_sv_display['interest_rate'].apply(lambda x: f"{x}%/năm")
+                df_sv_display['Kỳ hạn'] = df_sv_display['term'].apply(lambda x: f"{x} tháng")
+                df_sv_display['Ngày gửi'] = pd.to_datetime(df_sv_display['deposit_date']).dt.strftime('%d/%m/%Y')
+                
+                st.dataframe(df_sv_display[['Ngân hàng', 'Số tiền', 'Lãi suất', 'Kỳ hạn', 'Ngày gửi']], use_container_width=True, hide_index=True)
+                
+                with st.expander("⚙️ QUẢN LÝ / TẤT TOÁN SỔ TIẾT KIỆM", expanded=False):
+                    safe_key = fund_name.replace(" ", "_")
+                    options_sv = [f"#{r.get('id','')} | {safe_float(r.get('amount')):,.0f}₫ | LS:{r.get('interest_rate',0)}% | {safe_float(str(r.get('term',0)).replace(' Tháng', '').replace(' tháng', '')):.0f} Tháng" for _, r in fund_df.iterrows()]
+                    sel_sv = st.selectbox("Chọn sổ tiết kiệm", range(len(options_sv)), format_func=lambda i: options_sv[i], key=f"sel_sv_{safe_key}")
+                    sv_e1, sv_e2 = st.columns(2)
+                    with sv_e1:
+                        if st.button("✏️ SỬA SỔ", key=f"btn_edit_sv_{safe_key}", use_container_width=True):
+                            st.session_state.editing_savings = fund_df.iloc[sel_sv].to_dict()
+                    with sv_e2:
+                        if st.button("❌ TẤT TOÁN", key=f"btn_del_sv_{safe_key}", use_container_width=True):
+                            supabase.table("savings").delete().eq("id", fund_df.iloc[sel_sv]['id']).execute()
+                            st.toast("🗑️ Đã tất toán!", icon="✅")
+                            clear_cache_and_rerun()
             else:
                 st.info(f"Chưa có sổ tiết kiệm nào cho {fund_name}.")
         else:
@@ -1375,10 +1381,13 @@ with tab_realestate:
         if not unpaid.empty:
             today_date = date.today()
             unpaid['due_date_dt'] = pd.to_datetime(unpaid['due_date'], errors='coerce').dt.date
-            upcoming = unpaid[(unpaid['due_date_dt'] >= today_date) & (unpaid['due_date_dt'] <= today_date + pd.Timedelta(days=7))]
+            upcoming = unpaid[(unpaid['due_date_dt'] >= today_date) & (unpaid['due_date_dt'] <= today_date + pd.Timedelta(days=14))]
             for _, r in upcoming.iterrows():
                 days_left = (r['due_date_dt'] - today_date).days
-                st.warning(f"🚨 **Đến hạn thanh toán:** BĐS **{r.get('project_name','')} - {r.get('installment_name','')}** cần thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** trong **{days_left} ngày** tới!")
+                if days_left <= 7:
+                    st.error(f"🚨 **Khẩn cấp:** BĐS **{r.get('project_name','')} - {r.get('installment_name','')}** cần thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** trong **{days_left} ngày** tới!")
+                else:
+                    st.warning(f"⚠️ **Sắp đến hạn:** BĐS **{r.get('project_name','')} - {r.get('installment_name','')}** cần thanh toán **{safe_float(r.get('amount',0)):,.0f} ₫** trong **{days_left} ngày** tới.")
 
     st.subheader("🏠 Bất động sản đang sở hữu")
     df_re_f = df_re.copy()
@@ -1406,31 +1415,15 @@ with tab_realestate:
         display_cols = [c for c in ['project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note'] if c in df_re_f.columns]
         df_display = df_re_f[display_cols].copy()
         
-        for _, row in df_display.iterrows():
-            proj = row.get('project_name', '')
-            inst = row.get('installment_name', '')
-            amt = safe_float(row.get('amount', 0))
-            stat = str(row.get('status', '')).strip()
-            color_cls = "text-green" if stat == 'Đã thanh toán' else "text-red"
-            dt_val = row.get('due_date')
-            dt_str = pd.to_datetime(dt_val).strftime('%d/%m/%Y') if pd.notna(dt_val) else ''
-            src = row.get('funding_source', '')
-            note = row.get('note', '')
-            note_html = f"<div class='fintech-card-note'>{note}</div>" if note else ""
-            
-            st.markdown(f'''
-            <div class="fintech-card" style="border-left: 4px solid var(--accent-gold);">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
-                    <div>
-                        <div class="fintech-card-title" style="color: var(--accent-gold);">🏢 {proj} - {inst} <span style="font-size:0.8rem; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.1); margin-left: 5px; color: #f8fafc;">{stat}</span></div>
-                        <div class="fintech-card-subtitle">Hạn TT: {dt_str} • Nguồn: {src}</div>{note_html}
-                    </div>
-                    <div class="fintech-card-amount {color_cls}">
-                        {amt:,.0f} ₫
-                    </div>
-                </div>
-            </div>
-            ''', unsafe_allow_html=True)
+        # Format for dataframe
+        df_display['Dự án'] = df_display['project_name']
+        df_display['Đợt'] = df_display['installment_name']
+        df_display['Số tiền'] = pd.to_numeric(df_display['amount'], errors='coerce').apply(lambda x: f"{x:,.0f}")
+        df_display['Hạn TT'] = pd.to_datetime(df_display['due_date']).dt.strftime('%d/%m/%Y')
+        df_display['Nguồn'] = df_display['funding_source']
+        df_display['Trạng thái'] = df_display['status']
+        
+        st.dataframe(df_display[['Dự án', 'Đợt', 'Số tiền', 'Hạn TT', 'Nguồn', 'Trạng thái']], use_container_width=True, hide_index=True)
 
         with st.expander("⚙️ Quản lý & Chỉnh sửa BĐS", expanded=False):
             options_re = [f"{r.get('project_name', 'BĐS')} | {r.get('installment_name', '')} | {safe_float(r.get('amount', 0)):,.0f}₫ ({r.get('status','')})" for _, r in df_re_f.iterrows()]
@@ -1486,6 +1479,18 @@ with tab_realestate:
             next_pay = datetime(next_y, next_m, safe_day)
             progress_pct = ((principal - balance) / principal * 100) if principal > 0 else 0
 
+            
+            days_to_pay = (next_pay - today_dt).days
+            color_warning = "#facc15"
+            if days_to_pay <= 7:
+                color_warning = "#f87171"
+            elif days_to_pay > 15:
+                color_warning = "#4ade80"
+                
+            progress_color = "#4ade80"
+            if pct < 20: progress_color = "#f87171"
+            elif pct < 50: progress_color = "#facc15"
+
             debt_summary_rows.append({
                 "Mục đích": row.get('purpose', ''),
                 "Ngân hàng": row.get('bank', ''),
@@ -1495,6 +1500,9 @@ with tab_realestate:
                 "Lãi/Tháng": monthly_interest,
                 "Ngày TT tiếp": next_pay.strftime('%d/%m/%Y'),
                 "Đã trả (%)": progress_pct,
+                "color_warning": color_warning,
+                "progress_color": progress_color,
+                "days_to_pay": days_to_pay
             })
 
         if debt_summary_rows:
@@ -1507,6 +1515,9 @@ with tab_realestate:
                 lai_t = float(row["Lãi/Tháng"])
                 nxt = row["Ngày TT tiếp"]
                 pct = float(row["Đã trả (%)"])
+                color_warn = row["color_warning"]
+                prog_color = row["progress_color"]
+                days = row["days_to_pay"]
                 
                 st.markdown(f'''
                 <div class="fintech-card">
@@ -1514,7 +1525,7 @@ with tab_realestate:
                         <div style="flex: 1;">
                             <div class="fintech-card-title">🏦 {bank} - {purp}</div>
                             <div class="fintech-card-subtitle">Gốc/Tháng: {goc_t:,.0f} ₫ • Lãi: {lai_t:,.0f} ₫</div>
-                            <div class="fintech-card-subtitle" style="color: #facc15; margin-top: 4px;">⏳ Trả nợ kỳ tới: {nxt}</div>
+                            <div class="fintech-card-subtitle" style="color: {color_warn}; margin-top: 4px;">⏳ Trả nợ kỳ tới: {nxt} ({days} ngày nữa)</div>
                         </div>
                         <div style="text-align: right;">
                             <div style="font-size: 0.85rem; color: #94a3b8;">Dư nợ hiện tại</div>
@@ -1525,7 +1536,7 @@ with tab_realestate:
                         </div>
                     </div>
                     <div class="progress-container" style="margin-top:12px;background-color:rgba(255,255,255,0.1);">
-                        <div class="progress-bar-fill" style="width:{min(pct,100)}%;background-color:#4ade80;"></div>
+                        <div class="progress-bar-fill" style="width:{min(pct,100)}%;background-color:{prog_color};"></div>
                     </div>
                 </div>
                 ''', unsafe_allow_html=True)
