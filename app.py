@@ -267,6 +267,40 @@ def modal_cashflow():
             except Exception as e:
                 st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
 
+@st.dialog("✏️ SỬA CHI TIÊU")
+def modal_edit_cashflow():
+    row = st.session_state.editing_cf
+    
+    amount_str = st.text_input("SỐ TIỀN (VND)", value=f"{row.get('amount', 0):.0f}", placeholder="Ví dụ: 50k, 1.2tr")
+    
+    dt_val = pd.to_datetime(row.get('created_at'))
+    trade_date = st.date_input("Ngày giao dịch", value=dt_val.date() if pd.notna(dt_val) else date.today(), key="cf_edit_date")
+    
+    c1, c2 = st.columns(2)
+    cat_idx = CATS.index(row.get('category')) if row.get('category') in CATS else 0
+    with c1: category = st.selectbox("Phân loại", CATS, index=cat_idx, key="cf_edit_cat")
+    
+    acc_idx = BANK_ACCOUNTS.index(row.get('account')) if row.get('account') in BANK_ACCOUNTS else 0
+    with c2: account = st.selectbox("Tài khoản", BANK_ACCOUNTS, index=acc_idx, key="cf_edit_acc")
+    
+    note = st.text_input("Ghi chú", value=row.get('note', ''), key="cf_edit_note")
+    
+    if st.button("💾 LƯU THAY ĐỔI", use_container_width=True, type="primary", key="cf_edit_save"):
+        amt = parse_smart_amount(amount_str)
+        if amt <= 0:
+            st.error("⚠️ Nhập số tiền hợp lệ!")
+        else:
+            old_time = dt_val.strftime('%H:%M:%S') if pd.notna(dt_val) else time.strftime('%H:%M:%S')
+            created_at_str = f"{trade_date} {old_time}"
+            try:
+                supabase.table("cashflow").update({"account": account, "amount": amt, "category": category, "note": note, "created_at": created_at_str}).eq("id", row['id']).execute()
+                st.session_state.editing_cf = None
+                st.success("✅ Đã cập nhật giao dịch thành công!")
+                time.sleep(1)
+                clear_cache_and_rerun()
+            except Exception as e:
+                st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
+
 @st.dialog("ĐẶT LỆNH CỔ PHIẾU")
 def modal_stock():
     with st.form("add_stock_form"):
@@ -944,6 +978,22 @@ with tab_cashflow:
                 </div>
             </div>
             ''', unsafe_allow_html=True)
+            
+        st.markdown("---")
+        with st.expander("✏️ SỬA / XÓA GIAO DỊCH", expanded=False):
+            options_cf = [f"{pd.to_datetime(r['created_at']).strftime('%d/%m %H:%M')} - {r['category']} - {r['amount']:,.0f} ₫ ({r['account']})" for _, r in df_sorted.iterrows()]
+            sel_idx_cf = st.selectbox("Chọn GD để sửa/xóa", range(len(options_cf)), format_func=lambda i: options_cf[i], key="sel_cf")
+            ce1, ce2 = st.columns(2)
+            with ce1:
+                if st.button("✏️ SỬA", key="btn_edit_cf", use_container_width=True):
+                    st.session_state.editing_cf = df_sorted.iloc[sel_idx_cf].to_dict()
+            with ce2:
+                if st.button("❌ XÓA", key="btn_del_cf", use_container_width=True):
+                    supabase.table("cashflow").delete().eq("id", df_sorted.iloc[sel_idx_cf]['id']).execute()
+                    st.toast("🗑️ Đã xóa!", icon="✅")
+                    clear_cache_and_rerun()
+            if st.session_state.get("editing_cf"):
+                modal_edit_cashflow()
     else:
         st.info("Không có giao dịch phù hợp.")
 
