@@ -19,7 +19,7 @@ html, body, p, div, span, button, input, select, textarea, label, td, th {
 }
 
 .stIcon, span[data-baseweb="icon"], svg { font-family: inherit !important; }
-h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Inter', sans-serif !important; letter-spacing: -0.01em; color: var(--text-main); }
+h1, h2, h3, .hallmark-header, .stMetricValue { font-family: 'Inter', sans-serif !important; letter-spacing: -0.01em; color: #1B5E20 !important; }
 
 .block-container { padding-top: 3rem !important; padding-bottom: 1.5rem !important; gap: 0.5rem !important; }
 
@@ -211,3 +211,5 @@ button[data-testid="baseButton-primary"]:hover {
 .stTabs [data-baseweb="tab"] { height: 50px; white-space: pre; background-color: #ffffff; border-radius: 5px; color: #2E7D32 !important; font-weight: 600; border: 1px solid #e0e0e0; }
 .stTabs [aria-selected="true"] { background-color: #2E7D32 !important; color: white !important; }
 .metric-card { background-color: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-top: 5px solid #2E7D32; margin-bottom: 20px; }
+
+.stButton>button { width: 100%; border-radius: 8px; background-color: #2E7D32; color: white; border: none; }
