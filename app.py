@@ -653,7 +653,7 @@ with tab_home:
         
     st.divider()
 
-# --- TAB 1: DÒNG TIỀN (BỘ LỌC ĐA CHIỀU - DRILL-DOWN FILTER) ---
+# --- TAB 1: DÒNG TIỀN ---
 with tab_cashflow:
     col_btn1, col_btn2, _ = st.columns([1, 1, 2])
     with col_btn1:
@@ -674,7 +674,6 @@ with tab_cashflow:
     default_start = date(2026, 8, 1)
     default_end = date.today()
     
-    # THIẾT KẾ GRID 3 CỘT CHO BỘ LỌC ĐA CHIỀU (DRILL-DOWN)
     st.markdown("#### 🔍 Bộ lọc đa chiều (Drill-down Filter)")
     fc1, fc2, fc3 = st.columns([1, 1.5, 1.5])
     
@@ -697,16 +696,11 @@ with tab_cashflow:
         if "Chi tiêu" in cat_groups: available_cats_list.extend([c for c in CATS if c != "Lương/Thu nhập"])
         selected_cats = st.multiselect("↳ Danh mục chi tiết", available_cats_list, default=available_cats_list)
 
-    # Lọc dữ liệu dựa trên drill-down
     if not df_all.empty:
         df_filtered = df_all.copy()
         df_filtered['created_at_dt'] = pd.to_datetime(df_filtered['created_at'])
         df_filtered['date_only'] = df_filtered['created_at_dt'].dt.date
-        
-        # Lọc thời gian
         df_filtered = df_filtered[(df_filtered['date_only'] >= start_date) & (df_filtered['date_only'] <= end_date)]
-        
-        # Lọc tài khoản và danh mục khắt khe (Nếu list rỗng thì trả về Dataframe rỗng)
         df_filtered = df_filtered[df_filtered['account'].isin(selected_accounts)]
         df_filtered = df_filtered[df_filtered['category'].isin(selected_cats)]
     else:
@@ -1110,25 +1104,72 @@ with tab_realestate:
     if not df_re.empty and "project_name" in df_re.columns:
         if "contract_value" not in df_re.columns:
             df_re["contract_value"] = 0
+            
+        # BẢNG 1: TỔNG HỢP TIẾN ĐỘ BĐS VỚI PROGRESS BAR
+        st.markdown("##### 📈 Tiến độ thanh toán tổng thể")
+        df_re_paid = df_re[df_re['status'] == 'Đã thanh toán']
+        summary_re = []
+        
+        for proj, grp in df_re.groupby('project_name'):
+            contract_val = grp['contract_value'].iloc[0] if 'contract_value' in grp.columns else 0
+            paid_val = grp[grp['status'] == 'Đã thanh toán']['amount'].sum()
+            progress = (paid_val / contract_val * 100) if contract_val > 0 else 0
+            
+            summary_re.append({
+                "Dự án": proj,
+                "Giá trị HĐ (VND)": contract_val,
+                "Đã thanh toán (VND)": paid_val,
+                "Còn lại (VND)": contract_val - paid_val,
+                "Tiến độ (%)": progress
+            })
+            
+        if summary_re:
+            df_re_summary = pd.DataFrame(summary_re)
+            st.dataframe(
+                df_re_summary,
+                column_config={
+                    "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"),
+                    "Đã thanh toán (VND)": st.column_config.NumberColumn("Đã thanh toán (VND)", format="%,.0f ₫"),
+                    "Còn lại (VND)": st.column_config.NumberColumn("Còn lại (VND)", format="%,.0f ₫"),
+                    "Tiến độ (%)": st.column_config.ProgressColumn("Tiến độ (%)", format="%.1f%%", min_value=0, max_value=100)
+                },
+                use_container_width=True, hide_index=True
+            )
+            
+        st.markdown("##### 📄 Chi tiết các đợt thanh toán")
         if "funding_source" not in df_re.columns:
             df_re["funding_source"] = "N/A"
         if "note" not in df_re.columns:
             df_re["note"] = ""
             
-        df_re_display = df_re[['id', 'project_name', 'contract_value', 'installment_name', 'amount', 'funding_source', 'due_date', 'status', 'note']].rename(
+        # YÊU CẦU 1: Đổi thứ tự cột BĐS theo Cognitive Flow
+        df_re_display = df_re[['id', 'project_name', 'installment_name', 'contract_value', 'amount', 'funding_source', 'due_date', 'status', 'note']].rename(
             columns={
                 'project_name': 'Dự án', 
-                'contract_value': 'Giá trị HĐ (VND)',
                 'installment_name': 'Tên Đợt', 
+                'contract_value': 'Giá trị HĐ (VND)',
                 'amount': 'Thanh toán (VND)', 
                 'funding_source': 'Nguồn tiền',
-                'due_date': 'Hạn thanh toán', 
+                'due_date': 'Hạn TT', 
                 'status': 'Trạng thái',
                 'note': 'Ghi chú'
             }
         )
+        
+        # YÊU CẦU 3: Conditional Formatting cho trạng thái thanh toán BĐS
+        def style_bds(row):
+            if row['Trạng thái'] == 'Đã thanh toán':
+                # Nền xanh nhạt, chữ xanh lá nổi bật
+                return ['background-color: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 500'] * len(row)
+            else:
+                # Nền đỏ nhạt, chữ đỏ
+                return ['background-color: rgba(239, 68, 68, 0.1); color: #f87171'] * len(row)
+                
+        styled_re = df_re_display.style.apply(style_bds, axis=1)
+
+        # YÊU CẦU 2: Căn lề & định dạng tiền tệ
         st.dataframe(
-            df_re_display,
+            styled_re,
             column_config={
                 "id": None, 
                 "Giá trị HĐ (VND)": st.column_config.NumberColumn("Giá trị HĐ (VND)", format="%,.0f ₫"),
@@ -1137,6 +1178,7 @@ with tab_realestate:
             use_container_width=True, hide_index=True
         )
         
+        st.markdown("---")
         st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU BĐS")
         action_id_re = st.selectbox(
             "Chọn tiến độ BĐS để cập nhật:", 
@@ -1181,23 +1223,49 @@ with tab_realestate:
         df_vay["Dư nợ HIỆN TẠI"] = df_vay["original_principal"] - (df_vay["Gốc cố định/Tháng"] * df_vay["Tháng đã trả"])
         df_vay["Lãi tháng này"] = df_vay["Dư nợ HIỆN TẠI"] * (df_vay["interest_rate"] / 100 / 12)
         df_vay["Tổng phải trả (Tháng này)"] = df_vay["Gốc cố định/Tháng"] + df_vay["Lãi tháng này"]
+        df_vay["Đã trả (Gốc)"] = df_vay["original_principal"] - df_vay["Dư nợ HIỆN TẠI"]
+        df_vay["Tiến độ (%)"] = (df_vay["Đã trả (Gốc)"] / df_vay["original_principal"]) * 100
         
-        df_display_vay = df_vay.rename(columns={"purpose": "Mục đích", "bank": "Ngân hàng", "interest_rate": "Lãi suất (%/năm)", "total_months": "Tổng kỳ hạn"})
-        cols_to_show = ['id', 'Mục đích', 'Ngân hàng', 'Dư nợ HIỆN TẠI', 'Tháng đã trả', 'Tổng kỳ hạn', 'Lãi suất (%/năm)', 'Gốc cố định/Tháng', 'Lãi tháng này', 'Tổng phải trả (Tháng này)']
+        df_display_vay = df_vay.rename(columns={
+            "purpose": "Mục đích", 
+            "bank": "Ngân hàng", 
+            "total_months": "Tổng kỳ hạn",
+            "original_principal": "Vay ban đầu",
+            "interest_rate": "Lãi suất (%/năm)"
+        })
         
+        # YÊU CẦU 1: Đổi thứ tự cột Khoản Vay theo Cognitive Flow
+        cols_to_show = ['id', 'Mục đích', 'Ngân hàng', 'Tổng kỳ hạn', 'Tháng đã trả', 'Dư nợ HIỆN TẠI', 'Lãi suất (%/năm)', 'Vay ban đầu', 'Đã trả (Gốc)', 'Tiến độ (%)', 'Gốc cố định/Tháng', 'Lãi tháng này', 'Tổng phải trả (Tháng này)']
+        
+        # YÊU CẦU 3: Conditional Formatting cho dư nợ đã tất toán
+        def style_debt(row):
+            if row['Dư nợ HIỆN TẠI'] <= 0:
+                # Nếu đã trả xong (dư nợ = 0), tô màu xanh lá đánh dấu hoàn thành
+                return ['background-color: rgba(16, 185, 129, 0.15); color: #34d399; font-weight: 500'] * len(row)
+            return [''] * len(row)
+            
+        styled_debt = df_display_vay[cols_to_show].style.apply(style_debt, axis=1)
+        
+        # YÊU CẦU 2: Định dạng số cho tất cả các cột
         st.dataframe(
-            df_display_vay[cols_to_show],
+            styled_debt,
             column_config={
                 "id": None,
+                "Tổng kỳ hạn": st.column_config.NumberColumn("Tổng kỳ hạn", format="%d Tháng"),
+                "Tháng đã trả": st.column_config.NumberColumn("Đã trả", format="%d Tháng"),
+                "Vay ban đầu": st.column_config.NumberColumn("Vay ban đầu", format="%,.0f ₫"),
+                "Đã trả (Gốc)": st.column_config.NumberColumn("Đã trả (Gốc)", format="%,.0f ₫"),
                 "Dư nợ HIỆN TẠI": st.column_config.NumberColumn("Dư nợ HIỆN TẠI", format="%,.0f ₫"),
-                "Gốc cố định/Tháng": st.column_config.NumberColumn("Gốc cố định/Tháng", format="%,.0f ₫"),
-                "Lãi tháng này": st.column_config.NumberColumn("Lãi tháng này", format="%,.0f ₫"),
-                "Tổng phải trả (Tháng này)": st.column_config.NumberColumn("Tổng phải trả (Tháng)", format="%,.0f ₫"),
-                "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất (%/năm)", format="%.2f%%")
+                "Gốc cố định/Tháng": st.column_config.NumberColumn("Gốc/Tháng", format="%,.0f ₫"),
+                "Lãi tháng này": st.column_config.NumberColumn("Lãi tháng", format="%,.0f ₫"),
+                "Tổng phải trả (Tháng này)": st.column_config.NumberColumn("Tổng TT (Tháng)", format="%,.0f ₫"),
+                "Lãi suất (%/năm)": st.column_config.NumberColumn("Lãi suất", format="%.2f%%"),
+                "Tiến độ (%)": st.column_config.ProgressColumn("Tiến độ (%)", format="%.1f%%", min_value=0, max_value=100)
             },
             use_container_width=True, hide_index=True
         )
         
+        st.markdown("---")
         st.markdown("### ⚙️ QUẢN LÝ DỮ LIỆU KHOẢN VAY")
         action_id_debt = st.selectbox(
             "Chọn khoản vay để cập nhật:", 
