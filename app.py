@@ -962,131 +962,137 @@ net_worth = nw_data['net_worth']
 
 
 def render_net_worth_dashboard(data, df_cf, current_member):
-    import datetime
-    today = datetime.date.today()
-    this_month_start = today.replace(day=1)
-    last_month_end = this_month_start - datetime.timedelta(days=1)
-    last_month_start = last_month_end.replace(day=1)
-    
-    # 1. Safe Initialization
-    df_cf_f = filter_by_member(df_cf, current_member, col='account') if (df_cf is not None and not df_cf.empty) else pd.DataFrame()
-    
-    this_month_savings = 0
-    last_month_savings = 0
-    
-    # 2. Safe Column Manipulation
-    if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
-        df_cf_f = df_cf_f.copy()
-        try:
-            df_cf_f['date'] = pd.to_datetime(df_cf_f['created_at']).dt.date
-        except Exception:
-            df_cf_f['date'] = pd.Series(dtype='object')
-    else:
-        # Ensure 'date' column exists even if empty to prevent downstream chart crashes
-        df_cf_f['date'] = pd.Series(dtype='object')
-        
-    tm_df = df_cf_f[(df_cf_f['date'] >= this_month_start) & (df_cf_f['date'] <= today)].copy()
-    if not tm_df.empty:
-        tm_df['amount'] = pd.to_numeric(tm_df['amount'], errors='coerce').fillna(0)
-        tm_inc = tm_df[tm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
-        tm_exp = tm_df[tm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
-        this_month_savings = tm_inc - tm_exp
-        
-    lm_df = df_cf_f[(df_cf_f['date'] >= last_month_start) & (df_cf_f['date'] <= last_month_end)].copy()
-    if not lm_df.empty:
-        lm_df['amount'] = pd.to_numeric(lm_df['amount'], errors='coerce').fillna(0)
-        lm_inc = lm_df[lm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
-        lm_exp = lm_df[lm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
-        last_month_savings = lm_inc - lm_exp
-            
-    mom_pct = 0
-    mom_text = "Không có dữ liệu tháng trước"
-    mom_color = "#94a3b8"
-    if last_month_savings > 0:
-        mom_pct = ((this_month_savings - last_month_savings) / last_month_savings) * 100
-        if mom_pct > 0:
-            mom_text = f"Tăng {mom_pct:.1f}% so với tháng trước"
-            mom_color = "#4ade80"
-        else:
-            mom_text = f"Giảm {abs(mom_pct):.1f}% so với tháng trước"
-            mom_color = "#f87171"
-    elif last_month_savings < 0 and this_month_savings > 0:
-        mom_text = "Cải thiện so với tháng trước (âm)"
-        mom_color = "#4ade80"
-        
-    st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.2rem;">💡 Quick Insights</div>', unsafe_allow_html=True)
-    st.markdown(f'''
-    <div class="ios-card" style="padding: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {mom_color};">
-        <div>
-            <div style="font-size: 0.9rem; color: #94a3b8;">Tiết kiệm tháng này</div>
-            <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc;">{this_month_savings:,.0f} VNĐ</div>
-        </div>
-        <div style="text-align: right;">
-            <div style="font-size: 0.9rem; color: {mom_color}; font-weight: 600;">{mom_text}</div>
-        </div>
-    </div>
-    ''', unsafe_allow_html=True)
+    try:
+        import datetime
+        today = datetime.date.today()
+        this_month_start = today.replace(day=1)
+        last_month_end = this_month_start - datetime.timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
 
-    # Leverage Ratio
-    total_assets = sum(data['assets'].values())
-    total_debts = data['liabilities']
-    leverage_ratio = (total_debts / total_assets * 100) if total_assets > 0 else 0
-    
-    lr_color = "#4ade80" # Safe
-    lr_text = "An toàn"
-    if leverage_ratio > 50:
-        lr_color = "#ef4444" # Danger
-        lr_text = "Rủi ro cao"
-    elif leverage_ratio >= 30:
-        lr_color = "#f59e0b" # Warning
-        lr_text = "Cảnh báo"
-        
-    st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.5rem;">💰 Tổng Quan Tài Sản Ròng</div>', unsafe_allow_html=True)
-    
-    st.markdown(f"""<div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
-        <div class="ios-card" style="flex: 2; min-width: 250px; background: var(--primary-navy); border-left: 4px solid var(--accent-gold); padding: 25px;">
-            <div class="metric-title" style="color: var(--accent-gold);">TÀI SẢN RÒNG (NET WORTH)</div>
-            <div style="font-family: 'Inter', sans-serif; font-size: 2.5rem; font-weight: 700; color: #f8fafc;">{data['net_worth']:,.0f} VNĐ</div>
+        # 1. Safe Initialization
+        df_cf_f = filter_by_member(df_cf, current_member, col='account') if (df_cf is not None and not df_cf.empty) else pd.DataFrame()
+
+        this_month_savings = 0
+        last_month_savings = 0
+
+        # 2. Safe Column Manipulation
+        if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
+            df_cf_f = df_cf_f.copy()
+            try:
+                df_cf_f['date'] = pd.to_datetime(df_cf_f['created_at']).dt.date
+            except Exception:
+                df_cf_f['date'] = pd.Series(dtype='object')
+        else:
+            # Ensure 'date' column exists even if empty to prevent downstream chart crashes
+            df_cf_f['date'] = pd.Series(dtype='object')
+
+        tm_df = df_cf_f[(df_cf_f['date'] >= this_month_start) & (df_cf_f['date'] <= today)].copy()
+        if not tm_df.empty:
+            tm_df['amount'] = pd.to_numeric(tm_df['amount'], errors='coerce').fillna(0)
+            tm_inc = tm_df[tm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
+            tm_exp = tm_df[tm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
+            this_month_savings = tm_inc - tm_exp
+
+        lm_df = df_cf_f[(df_cf_f['date'] >= last_month_start) & (df_cf_f['date'] <= last_month_end)].copy()
+        if not lm_df.empty:
+            lm_df['amount'] = pd.to_numeric(lm_df['amount'], errors='coerce').fillna(0)
+            lm_inc = lm_df[lm_df['category'] == 'Lương/Thu nhập']['amount'].sum()
+            lm_exp = lm_df[lm_df['category'] != 'Lương/Thu nhập']['amount'].sum()
+            last_month_savings = lm_inc - lm_exp
+
+        mom_pct = 0
+        mom_text = "Không có dữ liệu tháng trước"
+        mom_color = "#94a3b8"
+        if last_month_savings > 0:
+            mom_pct = ((this_month_savings - last_month_savings) / last_month_savings) * 100
+            if mom_pct > 0:
+                mom_text = f"Tăng {mom_pct:.1f}% so với tháng trước"
+                mom_color = "#4ade80"
+            else:
+                mom_text = f"Giảm {abs(mom_pct):.1f}% so với tháng trước"
+                mom_color = "#f87171"
+        elif last_month_savings < 0 and this_month_savings > 0:
+            mom_text = "Cải thiện so với tháng trước (âm)"
+            mom_color = "#4ade80"
+
+        st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.2rem;">💡 Quick Insights</div>', unsafe_allow_html=True)
+        st.markdown(f'''
+        <div class="ios-card" style="padding: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {mom_color};">
+            <div>
+                <div style="font-size: 0.9rem; color: #94a3b8;">Tiết kiệm tháng này</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc;">{this_month_savings:,.0f} VNĐ</div>
+            </div>
+            <div style="text-align: right;">
+                <div style="font-size: 0.9rem; color: {mom_color}; font-weight: 600;">{mom_text}</div>
+            </div>
         </div>
-        <div class="ios-card" style="flex: 1; min-width: 200px; padding: 25px; border-left: 4px solid {lr_color};">
-            <div class="metric-title" style="color: #94a3b8;">TỶ LỆ NỢ / TÀI SẢN</div>
-            <div style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: {lr_color};">{leverage_ratio:.1f}%</div>
-            <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">Mức độ: <span style="color:{lr_color}; font-weight:600;">{lr_text}</span></div>
-        </div>
-    </div>""", unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown('<div class="metric-title">Phân bổ tài sản</div>', unsafe_allow_html=True)
-        import pandas as pd
-        asset_df = pd.DataFrame(data['assets'].items(), columns=['Loại', 'Giá trị'])
-        asset_df = asset_df[asset_df['Giá trị'] > 0]
-        import plotly.express as px
-        if not asset_df.empty:
-            fig = px.pie(asset_df, values='Giá trị', names='Loại', hole=0.55,
-                         color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6", "#eab308", "#ef4444"])
-            fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#333333",
-                              legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
-                              margin=dict(t=10, b=10, l=10, r=10))
-            st.plotly_chart(fig, use_container_width=True)
-        
-    with col2:
-        st.markdown('<div class="metric-title">Chi tiết phân loại</div>', unsafe_allow_html=True)
-        for asset, val in data['assets'].items():
+        ''', unsafe_allow_html=True)
+
+        # Leverage Ratio
+        total_assets = sum(data['assets'].values())
+        total_debts = data['liabilities']
+        leverage_ratio = (total_debts / total_assets * 100) if total_assets > 0 else 0
+
+        lr_color = "#4ade80" # Safe
+        lr_text = "An toàn"
+        if leverage_ratio > 50:
+            lr_color = "#ef4444" # Danger
+            lr_text = "Rủi ro cao"
+        elif leverage_ratio >= 30:
+            lr_color = "#f59e0b" # Warning
+            lr_text = "Cảnh báo"
+
+        st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.5rem;">💰 Tổng Quan Tài Sản Ròng</div>', unsafe_allow_html=True)
+
+        st.markdown(f"""<div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
+            <div class="ios-card" style="flex: 2; min-width: 250px; background: var(--primary-navy); border-left: 4px solid var(--accent-gold); padding: 25px;">
+                <div class="metric-title" style="color: var(--accent-gold);">TÀI SẢN RÒNG (NET WORTH)</div>
+                <div style="font-family: 'Inter', sans-serif; font-size: 2.5rem; font-weight: 700; color: #f8fafc;">{data['net_worth']:,.0f} VNĐ</div>
+            </div>
+            <div class="ios-card" style="flex: 1; min-width: 200px; padding: 25px; border-left: 4px solid {lr_color};">
+                <div class="metric-title" style="color: #94a3b8;">TỶ LỆ NỢ / TÀI SẢN</div>
+                <div style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: {lr_color};">{leverage_ratio:.1f}%</div>
+                <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">Mức độ: <span style="color:{lr_color}; font-weight:600;">{lr_text}</span></div>
+            </div>
+        </div>""", unsafe_allow_html=True)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown('<div class="metric-title">Phân bổ tài sản</div>', unsafe_allow_html=True)
+            import pandas as pd
+            asset_df = pd.DataFrame(data['assets'].items(), columns=['Loại', 'Giá trị'])
+            asset_df = asset_df[asset_df['Giá trị'] > 0]
+            import plotly.express as px
+            if not asset_df.empty:
+                fig = px.pie(asset_df, values='Giá trị', names='Loại', hole=0.55,
+                             color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6", "#eab308", "#ef4444"])
+                fig.update_layout(paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", font_color="#333333",
+                                  legend=dict(orientation="h", yanchor="bottom", y=-0.2, xanchor="center", x=0.5),
+                                  margin=dict(t=10, b=10, l=10, r=10))
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown('<div class="metric-title">Chi tiết phân loại</div>', unsafe_allow_html=True)
+            for asset, val in data['assets'].items():
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                    <span style="color:#94a3b8; font-weight:600;">{asset}</span>
+                    <span style="font-weight:700;">{val:,.0f} VNĐ</span>
+                </div>
+                """, unsafe_allow_html=True)
+
             st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                <span style="color:#94a3b8; font-weight:600;">{asset}</span>
-                <span style="font-weight:700;">{val:,.0f} VNĐ</span>
+            <div style="display:flex; justify-content:space-between; margin-top: 20px; padding: 15px; background: rgba(239, 68, 68, 0.2); border-radius: 8px;">
+                <span style="color:#f87171; font-weight:600;">Tổng Nợ</span>
+                <span style="font-weight:700; color:#f87171;">{data['liabilities']:,.0f} VNĐ</span>
             </div>
             """, unsafe_allow_html=True)
-            
-        st.markdown(f"""
-        <div style="display:flex; justify-content:space-between; margin-top: 20px; padding: 15px; background: rgba(239, 68, 68, 0.2); border-radius: 8px;">
-            <span style="color:#f87171; font-weight:600;">Tổng Nợ</span>
-            <span style="font-weight:700; color:#f87171;">{data['liabilities']:,.0f} VNĐ</span>
-        </div>
-        """, unsafe_allow_html=True)
 
+
+    except Exception as e:
+        import streamlit as st
+        st.error(f'Lỗi xử lý bảng điều khiển (Dashboard Error): {e}')
+        st.warning('Dữ liệu không đủ hoặc bị lỗi cấu trúc. Vui lòng kiểm tra database.')
 
 # =====================================================================
 # 9. TAB DEFINITIONS
