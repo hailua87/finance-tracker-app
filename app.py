@@ -176,7 +176,7 @@ def fetch_table(name):
         df = pd.DataFrame(res.data) if res and res.data else pd.DataFrame()
         for col in ['created_at', 'trade_date', 'start_date', 'deposit_date', 'due_date']:
             if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
+                df[col] = pd.to_datetime(df[col], errors='coerce', format='mixed')
         return df
     except Exception:
         return pd.DataFrame()
