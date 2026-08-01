@@ -499,13 +499,21 @@ def modal_add_savings():
             amt = parse_smart_amount(amount_str)
             if amt <= 0: st.error("⚠️ Số tiền > 0!")
             else:
+                payload_with_note = {"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "note": note, "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
+                payload_without_note = {"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}
                 try:
-                    supabase.table("savings").insert({"fund_owner": fund_owner, "bank": bank, "amount": int(amt), "interest_rate": float(rate), "term": int(term), "deposit_date": str(deposit_date), "note": note, "created_at": time.strftime("%Y-%m-%d %H:%M:%S")}).execute()
+                    try:
+                        supabase.table("savings").insert(payload_with_note).execute()
+                    except Exception as e:
+                        if 'Could not find the' in str(e) or 'PGRST204' in str(e):
+                            supabase.table("savings").insert(payload_without_note).execute()
+                        else:
+                            raise e
                     st.success("✅ Đã tạo sổ tiết kiệm thành công!")
                     time.sleep(1)
                     clear_cache_and_rerun()
                 except Exception as e:
-                    st.error(f"❌ Lỗi kết nối CSDL: {str(e)}")
+                    st.error(f"❌ Lỗi: {str(e)}")
 
 # --- EDIT MODALS ---
 @st.dialog("✏️ SỬA LỆNH CỔ PHIẾU")
@@ -591,14 +599,26 @@ def modal_edit_savings():
         with c1: amount = st.number_input("Số tiền", value=int(safe_float(row.get('amount'))), min_value=0, step=1000000, format="%d")
         with c2: rate = st.number_input("Lãi suất (%/năm)", value=safe_float(row.get('interest_rate')), min_value=0.0, step=0.1, format="%.1f")
         c3, c4 = st.columns(2)
-        with c3: term = st.number_input("Kỳ hạn (tháng)", value=int(safe_float(row.get('term'))), min_value=0, step=1)
+        with c3: term = st.number_input("Kỳ hạn (tháng)", value=int(safe_float(str(row.get('term')).replace(' Tháng', '').replace(' tháng', ''))), min_value=0, step=1)
         with c4: bank = st.text_input("Ngân hàng", value=row.get('bank', '') or '')
         note = st.text_input("Ghi chú", value=row.get('note', '') or '')
         if st.form_submit_button("💾 CẬP NHẬT", use_container_width=True):
-            supabase.table("savings").update({"fund_owner": fund_owner, "amount": int(amount), "interest_rate": float(rate), "term": int(term), "bank": bank, "note": note}).eq("id", row['id']).execute()
-            st.session_state.editing_savings = None
-            st.toast("✅ Đã cập nhật!", icon="💰")
-            clear_cache_and_rerun()
+            # Try to include note, but if it fails due to missing column, fallback to without note
+            payload_with_note = {"fund_owner": fund_owner, "amount": int(amount), "interest_rate": float(rate), "term": int(term), "bank": bank, "note": note}
+            payload_without_note = {"fund_owner": fund_owner, "amount": int(amount), "interest_rate": float(rate), "term": int(term), "bank": bank}
+            try:
+                try:
+                    supabase.table("savings").update(payload_with_note).eq("id", row['id']).execute()
+                except Exception as e:
+                    if 'Could not find the' in str(e) or 'PGRST204' in str(e):
+                        supabase.table("savings").update(payload_without_note).eq("id", row['id']).execute()
+                    else:
+                        raise e
+                st.session_state.editing_savings = None
+                st.toast("✅ Đã cập nhật!", icon="💰")
+                clear_cache_and_rerun()
+            except Exception as e:
+                st.error(f"❌ Lỗi: {str(e)}")
 
 @st.dialog("✏️ SỬA THÔNG TIN BĐS")
 def modal_edit_realestate():
