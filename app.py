@@ -1016,8 +1016,8 @@ def render_net_worth_dashboard(data, df_cf, current_member):
         st.markdown(f'''
         <div class="ios-card" style="padding: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid {mom_color};">
             <div>
-                <div style="font-size: 0.9rem; color: #94a3b8;">Tiết kiệm tháng này</div>
-                <div style="font-size: 1.5rem; font-weight: 700; color: #f8fafc;">{this_month_savings:,.0f} VNĐ</div>
+                <div style="font-size: 0.9rem; color: #6b7280;">Tiết kiệm tháng này</div>
+                <div style="font-size: 1.5rem; font-weight: 700; color: #2E7D32;">{this_month_savings:,.0f} VNĐ</div>
             </div>
             <div style="text-align: right;">
                 <div style="font-size: 0.9rem; color: {mom_color}; font-weight: 600;">{mom_text}</div>
@@ -1042,14 +1042,14 @@ def render_net_worth_dashboard(data, df_cf, current_member):
         st.markdown('<div class="metric-title" style="margin-bottom:10px; font-size:1.5rem;">💰 Tổng Quan Tài Sản Ròng</div>', unsafe_allow_html=True)
 
         st.markdown(f"""<div style="display: flex; gap: 15px; margin-bottom: 25px; flex-wrap: wrap;">
-            <div class="ios-card" style="flex: 2; min-width: 250px; background: var(--primary-navy); border-left: 4px solid var(--accent-gold); padding: 25px;">
-                <div class="metric-title" style="color: var(--accent-gold);">TÀI SẢN RÒNG (NET WORTH)</div>
-                <div style="font-family: 'Inter', sans-serif; font-size: 2.5rem; font-weight: 700; color: #f8fafc;">{data['net_worth']:,.0f} VNĐ</div>
+            <div class="ios-card" style="flex: 2; min-width: 250px; border-left: 4px solid #2E7D32; padding: 25px;">
+                <div class="metric-title" style="color: #6b7280;">TÀI SẢN RÒNG (NET WORTH)</div>
+                <div style="font-family: 'Inter', sans-serif; font-size: 2.5rem; font-weight: 700; color: #2E7D32;">{data['net_worth']:,.0f} VNĐ</div>
             </div>
             <div class="ios-card" style="flex: 1; min-width: 200px; padding: 25px; border-left: 4px solid {lr_color};">
-                <div class="metric-title" style="color: #94a3b8;">TỶ LỆ NỢ / TÀI SẢN</div>
+                <div class="metric-title" style="color: #6b7280;">TỶ LỆ NỢ / TÀI SẢN</div>
                 <div style="font-family: 'Inter', sans-serif; font-size: 2rem; font-weight: 700; color: {lr_color};">{leverage_ratio:.1f}%</div>
-                <div style="font-size: 0.85rem; color: #94a3b8; margin-top: 5px;">Mức độ: <span style="color:{lr_color}; font-weight:600;">{lr_text}</span></div>
+                <div style="font-size: 0.85rem; color: #6b7280; margin-top: 5px;">Mức độ: <span style="color:{lr_color}; font-weight:600;">{lr_text}</span></div>
             </div>
         </div>""", unsafe_allow_html=True)
 
@@ -1071,16 +1071,16 @@ def render_net_worth_dashboard(data, df_cf, current_member):
             st.markdown('<div class="metric-title">Chi tiết phân loại</div>', unsafe_allow_html=True)
             for asset, val in data['assets'].items():
                 st.markdown(f"""
-                <div style="display:flex; justify-content:space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="color:#94a3b8; font-weight:600;">{asset}</span>
-                    <span style="font-weight:700;">{val:,.0f} VNĐ</span>
+                <div style="display:flex; justify-content:space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(0,0,0,0.08);">
+                    <span style="color:#6b7280; font-weight:600;">{asset}</span>
+                    <span style="font-weight:700; color:#333;">{val:,.0f} VNĐ</span>
                 </div>
                 """, unsafe_allow_html=True)
 
             st.markdown(f"""
-            <div style="display:flex; justify-content:space-between; margin-top: 20px; padding: 15px; background: rgba(239, 68, 68, 0.2); border-radius: 8px;">
-                <span style="color:#f87171; font-weight:600;">Tổng Nợ</span>
-                <span style="font-weight:700; color:#f87171;">{data['liabilities']:,.0f} VNĐ</span>
+            <div style="display:flex; justify-content:space-between; margin-top: 20px; padding: 15px; background: #fef2f2; border-radius: 8px; border: 1px solid #fecaca;">
+                <span style="color:#D32F2F; font-weight:600;">Tổng Nợ</span>
+                <span style="font-weight:700; color:#D32F2F;">{data['liabilities']:,.0f} VNĐ</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -1611,19 +1611,19 @@ with tab_realestate:
         rm1, rm2, rm3, rm4 = st.columns(4)
         with rm1:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #38bdf8;">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">Tổng Hợp Đồng</div>'
+                        f'<div style="font-size:0.9rem; color:#6b7280;">Tổng Hợp Đồng</div>'
                         f'<div style="font-size:1.5rem; font-weight:700;">{total_contract:,.0f} ₫</div></div>', unsafe_allow_html=True)
         with rm2:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #4ade80;">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">Đã Thanh Toán</div>'
+                        f'<div style="font-size:0.9rem; color:#6b7280;">Đã Thanh Toán</div>'
                         f'<div style="font-size:1.5rem; font-weight:700; color:#4ade80;">{total_paid:,.0f} ₫</div></div>', unsafe_allow_html=True)
         with rm3:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #f87171;">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">Chưa Thanh Toán</div>'
+                        f'<div style="font-size:0.9rem; color:#6b7280;">Chưa Thanh Toán</div>'
                         f'<div style="font-size:1.5rem; font-weight:700; color:#f87171;">{total_unpaid:,.0f} ₫</div></div>', unsafe_allow_html=True)
         with rm4:
             st.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid {ltv_color};">'
-                        f'<div style="font-size:0.9rem; color:#94a3b8;">LTV (Nợ / BĐS)</div>'
+                        f'<div style="font-size:0.9rem; color:#6b7280;">LTV (Nợ / BĐS)</div>'
                         f'<div style="font-size:1.5rem; font-weight:700; color:{ltv_color};">{ltv:.1f}%</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br/>", unsafe_allow_html=True)
@@ -1646,7 +1646,7 @@ with tab_realestate:
                     first_unpaid_idx = i
                     break
                     
-            timeline_html = "<div style='margin-left: 10px; border-left: 2px solid #334155; padding-left: 15px; padding-top: 10px; padding-bottom: 10px;'>"
+            timeline_html = "<div style='margin-left: 10px; border-left: 2px solid #d1d5db; padding-left: 15px; padding-top: 10px; padding-bottom: 10px;'>"
             for i, (_, r) in enumerate(proj_data.iterrows()):
                 stat = str(r.get('status', '')).strip()
                 amt = safe_float(r.get('amount', 0))
@@ -1668,9 +1668,9 @@ with tab_realestate:
                 
                 timeline_html += f'''
                 <div style="position: relative; margin-bottom: 15px; opacity: {opacity};">
-                    <span style="position: absolute; left: -25px; background: #0f172a; padding: 2px;">{icon}</span>
+                    <span style="position: absolute; left: -25px; background: #F8F9FA; padding: 2px;">{icon}</span>
                     <div style="font-weight: 600; color: {color};">{inst} - {amt:,.0f} ₫</div>
-                    <div style="font-size: 0.85rem; color: #94a3b8;">Hạn TT: {dt_str}</div>
+                    <div style="font-size: 0.85rem; color: #6b7280;">Hạn TT: {dt_str}</div>
                 </div>
                 '''
             timeline_html += "</div>"
@@ -1743,8 +1743,8 @@ with tab_realestate:
                 color_warning = "#4ade80"
                 
             progress_color = "#4ade80"
-            if pct < 20: progress_color = "#f87171"
-            elif pct < 50: progress_color = "#facc15"
+            if progress_pct < 20: progress_color = "#f87171"
+            elif progress_pct < 50: progress_color = "#facc15"
 
             debt_summary_rows.append({
                 "Mục đích": row.get('purpose', ''),
@@ -1784,11 +1784,11 @@ with tab_realestate:
                             <div class="fintech-card-subtitle" style="color: {color_warn}; margin-top: 4px;">⏳ Trả nợ kỳ tới: {nxt} ({days} ngày nữa)</div>
                         </div>
                         <div style="text-align: right;">
-                            <div style="font-size: 0.85rem; color: #94a3b8;">Dư nợ hiện tại</div>
+                            <div style="font-size: 0.85rem; color: #6b7280;">Dư nợ hiện tại</div>
                             <div class="fintech-card-amount text-red">
                                 {bal:,.0f} ₫
                             </div>
-                            <div style="font-size: 0.8rem; color: #94a3b8; margin-top: 2px;">/ {orig:,.0f} ₫</div>
+                            <div style="font-size: 0.8rem; color: #6b7280; margin-top: 2px;">/ {orig:,.0f} ₫</div>
                         </div>
                     </div>
                 </div>
