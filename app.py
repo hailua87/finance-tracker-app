@@ -1112,9 +1112,17 @@ with tab_cashflow:
     month_start = today.replace(month=1, day=1)
 
     if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
-        fc1, fc2 = st.columns(2)
+        # Get unique accounts for filter
+        available_accounts = sorted(df_cf_f['account'].astype(str).dropna().unique().tolist()) if 'account' in df_cf_f.columns else []
+        
+        fc1, fc2, fc3 = st.columns(3)
         with fc1: d_start = st.date_input("Từ ngày", month_start, key="cf_d1")
         with fc2: d_end = st.date_input("Đến ngày", today, key="cf_d2")
+        with fc3: selected_accounts = st.multiselect("💳 Tài khoản / Thẻ", options=available_accounts, default=available_accounts, key="cf_acc_filter")
+        
+        # Apply account filter
+        if selected_accounts and 'account' in df_cf_f.columns:
+            df_cf_f = df_cf_f[df_cf_f['account'].astype(str).isin(selected_accounts)]
         
         # Ensure the column is datetime before applying .dt. Slicing first 10 chars avoids mixed timezone formats (e.g. +00 vs no tz)
         df_cf_f['created_at'] = pd.to_datetime(df_cf_f['created_at'].astype(str).str[:10], errors='coerce')
