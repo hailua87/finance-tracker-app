@@ -960,10 +960,10 @@ net_worth = nw_data['net_worth']
 
 def render_net_worth_dashboard(data, df_cf, current_member):
     try:
-        import datetime
-        today = datetime.date.today()
+        from datetime import timedelta
+        today = date.today()
         this_month_start = today.replace(day=1)
-        last_month_end = this_month_start - datetime.timedelta(days=1)
+        last_month_end = this_month_start - timedelta(days=1)
         last_month_start = last_month_end.replace(day=1)
 
         # 1. Safe Initialization
@@ -1058,7 +1058,7 @@ def render_net_worth_dashboard(data, df_cf, current_member):
             st.markdown('<div class="metric-title">Phân bổ tài sản</div>', unsafe_allow_html=True)
             asset_df = pd.DataFrame(data['assets'].items(), columns=['Loại', 'Giá trị'])
             asset_df = asset_df[asset_df['Giá trị'] > 0]
-            import plotly.express as px
+
             if not asset_df.empty:
                 fig = px.pie(asset_df, values='Giá trị', names='Loại', hole=0.55,
                              color_discrete_sequence=["#10b981", "#38bdf8", "#f59e0b", "#8b5cf6", "#eab308", "#ef4444"])
@@ -1086,7 +1086,6 @@ def render_net_worth_dashboard(data, df_cf, current_member):
 
 
     except Exception as e:
-        import streamlit as st
         st.error(f'Lỗi xử lý bảng điều khiển (Dashboard Error): {e}')
         st.warning('Dữ liệu không đủ hoặc bị lỗi cấu trúc. Vui lòng kiểm tra database.')
 
@@ -1796,7 +1795,7 @@ with tab_realestate:
                 ''', unsafe_allow_html=True)
                 
                 # Plotly Chart for Amortization
-                import plotly.graph_objects as go
+
                 fig = go.Figure()
                 fig.add_trace(go.Bar(
                     y=[purp], x=[paid], name='Đã trả', orientation='h', marker=dict(color='#2E7D32')
