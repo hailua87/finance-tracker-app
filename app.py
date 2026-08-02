@@ -1116,8 +1116,8 @@ with tab_cashflow:
         with fc1: d_start = st.date_input("Từ ngày", month_start, key="cf_d1")
         with fc2: d_end = st.date_input("Đến ngày", today, key="cf_d2")
         
-        # Ensure the column is datetime before applying .dt
-        df_cf_f['created_at'] = pd.to_datetime(df_cf_f['created_at'], errors='coerce')
+        # Ensure the column is datetime before applying .dt. Slicing first 10 chars avoids mixed timezone formats (e.g. +00 vs no tz)
+        df_cf_f['created_at'] = pd.to_datetime(df_cf_f['created_at'].astype(str).str[:10], errors='coerce')
         
         # Drop NaT values to prevent comparison errors
         df_cf_f = df_cf_f.dropna(subset=['created_at'])
