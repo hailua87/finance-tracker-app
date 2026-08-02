@@ -1109,7 +1109,7 @@ with tab_cashflow:
     st.markdown(f'<div class="metric-title" style="margin-bottom:10px;">DÒNG TIỀN{f" ({current_member})" if current_member != "Tất cả" else ""}</div>', unsafe_allow_html=True)
     df_cf_f = filter_by_member(df_cf, current_member, col='account')
     today = date.today()
-    month_start = today.replace(day=1)
+    month_start = today.replace(month=1, day=1)
 
     if not df_cf_f.empty and 'created_at' in df_cf_f.columns:
         fc1, fc2 = st.columns(2)
@@ -1666,13 +1666,7 @@ with tab_realestate:
                     color = "#94a3b8"
                     opacity = "0.5"
                 
-                timeline_html += f'''
-                <div style="position: relative; margin-bottom: 15px; opacity: {opacity};">
-                    <span style="position: absolute; left: -25px; background: #F8F9FA; padding: 2px;">{icon}</span>
-                    <div style="font-weight: 600; color: {color};">{inst} - {amt:,.0f} ₫</div>
-                    <div style="font-size: 0.85rem; color: #6b7280;">Hạn TT: {dt_str}</div>
-                </div>
-                '''
+                timeline_html += f'<div style="position: relative; margin-bottom: 15px; opacity: {opacity};"><span style="position: absolute; left: -25px; background: #F8F9FA; padding: 2px;">{icon}</span><div style="font-weight: 600; color: {color};">{inst} - {amt:,.0f} ₫</div><div style="font-size: 0.85rem; color: #6b7280;">Hạn TT: {dt_str}</div></div>'
             timeline_html += "</div>"
             st.markdown(timeline_html, unsafe_allow_html=True)
             st.markdown("<hr style='opacity:0.2;'/>", unsafe_allow_html=True)
@@ -1834,9 +1828,9 @@ with tab_realestate:
             first_month_payment = df_sched.iloc[0]['Tổng phải trả'] if not df_sched.empty else 0
             
             mc1, mc2, mc3 = st.columns(3)
-            mc1.metric("Tổng gốc", f"{prin:,.0f} ₫")
-            mc2.metric("Tổng lãi dự kiến", f"{total_interest:,.0f} ₫")
-            mc3.metric("Thanh toán kỳ đầu", f"{first_month_payment:,.0f} ₫")
+            mc1.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #2E7D32;"><div style="font-size:0.9rem; color:#6b7280;">Tổng gốc</div><div style="font-size:1.5rem; font-weight:700; color:#2E7D32;">{prin:,.0f} ₫</div></div>', unsafe_allow_html=True)
+            mc2.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #2E7D32;"><div style="font-size:0.9rem; color:#6b7280;">Tổng lãi dự kiến</div><div style="font-size:1.5rem; font-weight:700; color:#2E7D32;">{total_interest:,.0f} ₫</div></div>', unsafe_allow_html=True)
+            mc3.markdown(f'<div class="ios-card" style="padding:15px; border-left: 4px solid #2E7D32;"><div style="font-size:0.9rem; color:#6b7280;">Thanh toán kỳ đầu</div><div style="font-size:1.5rem; font-weight:700; color:#2E7D32;">{first_month_payment:,.0f} ₫</div></div>', unsafe_allow_html=True)
             
             fig_sched = px.bar(
                 df_sched, 
