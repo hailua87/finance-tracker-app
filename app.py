@@ -1173,7 +1173,13 @@ with tab_cashflow:
                 if event and isinstance(event, dict) and event.get("selection"):
                     pts = event["selection"].get("points", [])
                     if pts:
-                        selected_cat = pts[0].get("label")
+                        pt = pts[0]
+                        if "label" in pt:
+                            selected_cat = pt["label"]
+                        elif "pointIndex" in pt:
+                            selected_cat = df_pie.iloc[pt["pointIndex"]]['category']
+                        elif "pointNumber" in pt:
+                            selected_cat = df_pie.iloc[pt["pointNumber"]]['category']
             else:
                 st.info("Chưa có chi tiêu.")
         else:
